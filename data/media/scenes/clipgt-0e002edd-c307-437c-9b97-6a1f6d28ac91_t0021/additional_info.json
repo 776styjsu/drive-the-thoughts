@@ -1,0 +1,4404 @@
+{
+  "schema_version": 2,
+  "kind": "alpasim_trajectory_additional_info",
+  "metadata_file": "data/media/scenes/clipgt-0e002edd-c307-437c-9b97-6a1f6d28ac91_t0021/metadata.json",
+  "trajectory_source": "trajectory_xy_rig_frame",
+  "coordinate_frame": "ego_rig_frame",
+  "units": {
+    "position": "m",
+    "time": "s",
+    "timestamp": "us",
+    "velocity": "m/s",
+    "acceleration": "m/s^2",
+    "jerk": "m/s^3",
+    "heading": "rad",
+    "curvature": "1/m"
+  },
+  "axis_descriptions": {
+    "x": "rx, longitudinal offset forward from ego at t0, meters",
+    "y": "ry, lateral offset left from ego at t0, meters",
+    "z": "not present in rig-frame trajectory"
+  },
+  "summary": {
+    "clip_id": "clipgt-0e002edd-c307-437c-9b97-6a1f6d28ac91_t0021",
+    "time_now_us": 4823514676012,
+    "time_query_us": 4823514776012,
+    "trajectory_status": "ok",
+    "waypoint_count": 65,
+    "segment_count": 64,
+    "time_horizon_s": 6.4,
+    "total_distance_2d_m": 15.650246,
+    "net_displacement_2d_m": 15.650229,
+    "final_position_m": {
+      "x": 15.65022,
+      "y": 0.016997,
+      "z": null
+    },
+    "final_forward_offset_m": 15.65022,
+    "final_lateral_offset_m": 0.016997,
+    "max_abs_lateral_offset_m": 0.022417,
+    "average_dt_s": 0.1,
+    "min_dt_s": 0.1,
+    "max_dt_s": 0.1,
+    "dt_is_uniform": true,
+    "timestamps_strictly_increasing": true,
+    "min_speed_mps": 0.03319,
+    "mean_speed_mps": 2.445352,
+    "max_speed_mps": 6.59024,
+    "max_speed_kph": 23.724864,
+    "min_longitudinal_acceleration_mps2": -1.77629,
+    "mean_longitudinal_acceleration_mps2": -0.966747,
+    "max_longitudinal_acceleration_mps2": 1.2266,
+    "max_abs_longitudinal_acceleration_mps2": 1.77629,
+    "max_abs_lateral_acceleration_mps2": 0.026421,
+    "max_abs_jerk_mps3": 2.652009,
+    "heading_change_rad": -0.003341,
+    "heading_change_deg": -0.191425,
+    "max_abs_curvature_1pm": 0.038412
+  },
+  "meta_actions": {
+    "vocabulary": {
+      "longitudinal": [
+        "stop",
+        "reverse",
+        "maintain_speed",
+        "gentle_accelerate",
+        "strong_accelerate",
+        "gentle_decelerate",
+        "strong_decelerate"
+      ],
+      "lateral": [
+        "go_straight",
+        "steer_left",
+        "steer_right",
+        "sharp_steer_left",
+        "sharp_steer_right",
+        "reverse_left",
+        "reverse_right"
+      ]
+    },
+    "thresholds": {
+      "stop_speed_mps": 0.2,
+      "reverse_speed_mps": 0.2,
+      "maintain_accel_mps2": 0.3,
+      "strong_accel_mps2": 1.5,
+      "straight_curvature_1pm": 0.005,
+      "sharp_curvature_1pm": 0.05
+    },
+    "coordinate_frame": "ego_rig_frame",
+    "lateral_side_reliable": true,
+    "dominant": {
+      "longitudinal": "gentle_decelerate",
+      "lateral": "go_straight"
+    },
+    "longitudinal_distribution": {
+      "maintain_speed": 1,
+      "strong_decelerate": 15,
+      "gentle_decelerate": 31,
+      "stop": 13,
+      "gentle_accelerate": 4
+    },
+    "lateral_distribution": {
+      "go_straight": 64
+    },
+    "transition_count": 6,
+    "transitions": [
+      {
+        "at_index": 1,
+        "at_timestamp_us": 4823514826012,
+        "from": {
+          "longitudinal": "maintain_speed",
+          "lateral": "go_straight"
+        },
+        "to": {
+          "longitudinal": "strong_decelerate",
+          "lateral": "go_straight"
+        }
+      },
+      {
+        "at_index": 4,
+        "at_timestamp_us": 4823515126012,
+        "from": {
+          "longitudinal": "strong_decelerate",
+          "lateral": "go_straight"
+        },
+        "to": {
+          "longitudinal": "gentle_decelerate",
+          "lateral": "go_straight"
+        }
+      },
+      {
+        "at_index": 27,
+        "at_timestamp_us": 4823517426012,
+        "from": {
+          "longitudinal": "gentle_decelerate",
+          "lateral": "go_straight"
+        },
+        "to": {
+          "longitudinal": "strong_decelerate",
+          "lateral": "go_straight"
+        }
+      },
+      {
+        "at_index": 39,
+        "at_timestamp_us": 4823518626012,
+        "from": {
+          "longitudinal": "strong_decelerate",
+          "lateral": "go_straight"
+        },
+        "to": {
+          "longitudinal": "gentle_decelerate",
+          "lateral": "go_straight"
+        }
+      },
+      {
+        "at_index": 47,
+        "at_timestamp_us": 4823519426012,
+        "from": {
+          "longitudinal": "gentle_decelerate",
+          "lateral": "go_straight"
+        },
+        "to": {
+          "longitudinal": "stop",
+          "lateral": "go_straight"
+        }
+      },
+      {
+        "at_index": 60,
+        "at_timestamp_us": 4823520726012,
+        "from": {
+          "longitudinal": "stop",
+          "lateral": "go_straight"
+        },
+        "to": {
+          "longitudinal": "gentle_accelerate",
+          "lateral": "go_straight"
+        }
+      }
+    ],
+    "per_segment": [
+      {
+        "index": 0,
+        "start_timestamp_us": 4823514676012,
+        "end_timestamp_us": 4823514776012,
+        "mid_timestamp_us": 4823514726012,
+        "longitudinal": "maintain_speed",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 1,
+        "start_timestamp_us": 4823514776012,
+        "end_timestamp_us": 4823514876012,
+        "mid_timestamp_us": 4823514826012,
+        "longitudinal": "strong_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 2,
+        "start_timestamp_us": 4823514876012,
+        "end_timestamp_us": 4823514976012,
+        "mid_timestamp_us": 4823514926012,
+        "longitudinal": "strong_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 3,
+        "start_timestamp_us": 4823514976012,
+        "end_timestamp_us": 4823515076012,
+        "mid_timestamp_us": 4823515026012,
+        "longitudinal": "strong_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 4,
+        "start_timestamp_us": 4823515076012,
+        "end_timestamp_us": 4823515176012,
+        "mid_timestamp_us": 4823515126012,
+        "longitudinal": "gentle_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 5,
+        "start_timestamp_us": 4823515176012,
+        "end_timestamp_us": 4823515276012,
+        "mid_timestamp_us": 4823515226012,
+        "longitudinal": "gentle_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 6,
+        "start_timestamp_us": 4823515276012,
+        "end_timestamp_us": 4823515376012,
+        "mid_timestamp_us": 4823515326012,
+        "longitudinal": "gentle_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 7,
+        "start_timestamp_us": 4823515376012,
+        "end_timestamp_us": 4823515476012,
+        "mid_timestamp_us": 4823515426012,
+        "longitudinal": "gentle_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 8,
+        "start_timestamp_us": 4823515476012,
+        "end_timestamp_us": 4823515576012,
+        "mid_timestamp_us": 4823515526012,
+        "longitudinal": "gentle_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 9,
+        "start_timestamp_us": 4823515576012,
+        "end_timestamp_us": 4823515676012,
+        "mid_timestamp_us": 4823515626012,
+        "longitudinal": "gentle_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 10,
+        "start_timestamp_us": 4823515676012,
+        "end_timestamp_us": 4823515776012,
+        "mid_timestamp_us": 4823515726012,
+        "longitudinal": "gentle_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 11,
+        "start_timestamp_us": 4823515776012,
+        "end_timestamp_us": 4823515876012,
+        "mid_timestamp_us": 4823515826012,
+        "longitudinal": "gentle_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 12,
+        "start_timestamp_us": 4823515876012,
+        "end_timestamp_us": 4823515976012,
+        "mid_timestamp_us": 4823515926012,
+        "longitudinal": "gentle_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 13,
+        "start_timestamp_us": 4823515976012,
+        "end_timestamp_us": 4823516076012,
+        "mid_timestamp_us": 4823516026012,
+        "longitudinal": "gentle_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 14,
+        "start_timestamp_us": 4823516076012,
+        "end_timestamp_us": 4823516176012,
+        "mid_timestamp_us": 4823516126012,
+        "longitudinal": "gentle_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 15,
+        "start_timestamp_us": 4823516176012,
+        "end_timestamp_us": 4823516276012,
+        "mid_timestamp_us": 4823516226012,
+        "longitudinal": "gentle_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 16,
+        "start_timestamp_us": 4823516276012,
+        "end_timestamp_us": 4823516376012,
+        "mid_timestamp_us": 4823516326012,
+        "longitudinal": "gentle_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 17,
+        "start_timestamp_us": 4823516376012,
+        "end_timestamp_us": 4823516476012,
+        "mid_timestamp_us": 4823516426012,
+        "longitudinal": "gentle_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 18,
+        "start_timestamp_us": 4823516476012,
+        "end_timestamp_us": 4823516576012,
+        "mid_timestamp_us": 4823516526012,
+        "longitudinal": "gentle_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 19,
+        "start_timestamp_us": 4823516576012,
+        "end_timestamp_us": 4823516676012,
+        "mid_timestamp_us": 4823516626012,
+        "longitudinal": "gentle_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 20,
+        "start_timestamp_us": 4823516676012,
+        "end_timestamp_us": 4823516776012,
+        "mid_timestamp_us": 4823516726012,
+        "longitudinal": "gentle_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 21,
+        "start_timestamp_us": 4823516776012,
+        "end_timestamp_us": 4823516876012,
+        "mid_timestamp_us": 4823516826012,
+        "longitudinal": "gentle_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 22,
+        "start_timestamp_us": 4823516876012,
+        "end_timestamp_us": 4823516976012,
+        "mid_timestamp_us": 4823516926012,
+        "longitudinal": "gentle_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 23,
+        "start_timestamp_us": 4823516976012,
+        "end_timestamp_us": 4823517076012,
+        "mid_timestamp_us": 4823517026012,
+        "longitudinal": "gentle_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 24,
+        "start_timestamp_us": 4823517076012,
+        "end_timestamp_us": 4823517176012,
+        "mid_timestamp_us": 4823517126012,
+        "longitudinal": "gentle_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 25,
+        "start_timestamp_us": 4823517176012,
+        "end_timestamp_us": 4823517276012,
+        "mid_timestamp_us": 4823517226012,
+        "longitudinal": "gentle_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 26,
+        "start_timestamp_us": 4823517276012,
+        "end_timestamp_us": 4823517376012,
+        "mid_timestamp_us": 4823517326012,
+        "longitudinal": "gentle_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 27,
+        "start_timestamp_us": 4823517376012,
+        "end_timestamp_us": 4823517476012,
+        "mid_timestamp_us": 4823517426012,
+        "longitudinal": "strong_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 28,
+        "start_timestamp_us": 4823517476012,
+        "end_timestamp_us": 4823517576012,
+        "mid_timestamp_us": 4823517526012,
+        "longitudinal": "strong_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 29,
+        "start_timestamp_us": 4823517576012,
+        "end_timestamp_us": 4823517676012,
+        "mid_timestamp_us": 4823517626012,
+        "longitudinal": "strong_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 30,
+        "start_timestamp_us": 4823517676012,
+        "end_timestamp_us": 4823517776012,
+        "mid_timestamp_us": 4823517726012,
+        "longitudinal": "strong_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 31,
+        "start_timestamp_us": 4823517776012,
+        "end_timestamp_us": 4823517876012,
+        "mid_timestamp_us": 4823517826012,
+        "longitudinal": "strong_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 32,
+        "start_timestamp_us": 4823517876012,
+        "end_timestamp_us": 4823517976012,
+        "mid_timestamp_us": 4823517926012,
+        "longitudinal": "strong_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 33,
+        "start_timestamp_us": 4823517976012,
+        "end_timestamp_us": 4823518076012,
+        "mid_timestamp_us": 4823518026012,
+        "longitudinal": "strong_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 34,
+        "start_timestamp_us": 4823518076012,
+        "end_timestamp_us": 4823518176012,
+        "mid_timestamp_us": 4823518126012,
+        "longitudinal": "strong_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 35,
+        "start_timestamp_us": 4823518176012,
+        "end_timestamp_us": 4823518276012,
+        "mid_timestamp_us": 4823518226012,
+        "longitudinal": "strong_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 36,
+        "start_timestamp_us": 4823518276012,
+        "end_timestamp_us": 4823518376012,
+        "mid_timestamp_us": 4823518326012,
+        "longitudinal": "strong_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 37,
+        "start_timestamp_us": 4823518376012,
+        "end_timestamp_us": 4823518476012,
+        "mid_timestamp_us": 4823518426012,
+        "longitudinal": "strong_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 38,
+        "start_timestamp_us": 4823518476012,
+        "end_timestamp_us": 4823518576012,
+        "mid_timestamp_us": 4823518526012,
+        "longitudinal": "strong_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 39,
+        "start_timestamp_us": 4823518576012,
+        "end_timestamp_us": 4823518676012,
+        "mid_timestamp_us": 4823518626012,
+        "longitudinal": "gentle_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 40,
+        "start_timestamp_us": 4823518676012,
+        "end_timestamp_us": 4823518776012,
+        "mid_timestamp_us": 4823518726012,
+        "longitudinal": "gentle_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 41,
+        "start_timestamp_us": 4823518776012,
+        "end_timestamp_us": 4823518876012,
+        "mid_timestamp_us": 4823518826012,
+        "longitudinal": "gentle_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 42,
+        "start_timestamp_us": 4823518876012,
+        "end_timestamp_us": 4823518976012,
+        "mid_timestamp_us": 4823518926012,
+        "longitudinal": "gentle_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 43,
+        "start_timestamp_us": 4823518976012,
+        "end_timestamp_us": 4823519076012,
+        "mid_timestamp_us": 4823519026012,
+        "longitudinal": "gentle_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 44,
+        "start_timestamp_us": 4823519076012,
+        "end_timestamp_us": 4823519176012,
+        "mid_timestamp_us": 4823519126012,
+        "longitudinal": "gentle_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 45,
+        "start_timestamp_us": 4823519176012,
+        "end_timestamp_us": 4823519276012,
+        "mid_timestamp_us": 4823519226012,
+        "longitudinal": "gentle_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 46,
+        "start_timestamp_us": 4823519276012,
+        "end_timestamp_us": 4823519376012,
+        "mid_timestamp_us": 4823519326012,
+        "longitudinal": "gentle_decelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 47,
+        "start_timestamp_us": 4823519376012,
+        "end_timestamp_us": 4823519476012,
+        "mid_timestamp_us": 4823519426012,
+        "longitudinal": "stop",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 48,
+        "start_timestamp_us": 4823519476012,
+        "end_timestamp_us": 4823519576012,
+        "mid_timestamp_us": 4823519526012,
+        "longitudinal": "stop",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 49,
+        "start_timestamp_us": 4823519576012,
+        "end_timestamp_us": 4823519676012,
+        "mid_timestamp_us": 4823519626012,
+        "longitudinal": "stop",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 50,
+        "start_timestamp_us": 4823519676012,
+        "end_timestamp_us": 4823519776012,
+        "mid_timestamp_us": 4823519726012,
+        "longitudinal": "stop",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 51,
+        "start_timestamp_us": 4823519776012,
+        "end_timestamp_us": 4823519876012,
+        "mid_timestamp_us": 4823519826012,
+        "longitudinal": "stop",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 52,
+        "start_timestamp_us": 4823519876012,
+        "end_timestamp_us": 4823519976012,
+        "mid_timestamp_us": 4823519926012,
+        "longitudinal": "stop",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 53,
+        "start_timestamp_us": 4823519976012,
+        "end_timestamp_us": 4823520076012,
+        "mid_timestamp_us": 4823520026012,
+        "longitudinal": "stop",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 54,
+        "start_timestamp_us": 4823520076012,
+        "end_timestamp_us": 4823520176012,
+        "mid_timestamp_us": 4823520126012,
+        "longitudinal": "stop",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 55,
+        "start_timestamp_us": 4823520176012,
+        "end_timestamp_us": 4823520276012,
+        "mid_timestamp_us": 4823520226012,
+        "longitudinal": "stop",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 56,
+        "start_timestamp_us": 4823520276012,
+        "end_timestamp_us": 4823520376012,
+        "mid_timestamp_us": 4823520326012,
+        "longitudinal": "stop",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 57,
+        "start_timestamp_us": 4823520376012,
+        "end_timestamp_us": 4823520476012,
+        "mid_timestamp_us": 4823520426012,
+        "longitudinal": "stop",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 58,
+        "start_timestamp_us": 4823520476012,
+        "end_timestamp_us": 4823520576012,
+        "mid_timestamp_us": 4823520526012,
+        "longitudinal": "stop",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 59,
+        "start_timestamp_us": 4823520576012,
+        "end_timestamp_us": 4823520676012,
+        "mid_timestamp_us": 4823520626012,
+        "longitudinal": "stop",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 60,
+        "start_timestamp_us": 4823520676012,
+        "end_timestamp_us": 4823520776012,
+        "mid_timestamp_us": 4823520726012,
+        "longitudinal": "gentle_accelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 61,
+        "start_timestamp_us": 4823520776012,
+        "end_timestamp_us": 4823520876012,
+        "mid_timestamp_us": 4823520826012,
+        "longitudinal": "gentle_accelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 62,
+        "start_timestamp_us": 4823520876012,
+        "end_timestamp_us": 4823520976012,
+        "mid_timestamp_us": 4823520926012,
+        "longitudinal": "gentle_accelerate",
+        "lateral": "go_straight"
+      },
+      {
+        "index": 63,
+        "start_timestamp_us": 4823520976012,
+        "end_timestamp_us": 4823521076012,
+        "mid_timestamp_us": 4823521026012,
+        "longitudinal": "gentle_accelerate",
+        "lateral": "go_straight"
+      }
+    ]
+  },
+  "waypoints": [
+    {
+      "index": 0,
+      "timestamp_us": 4823514676012,
+      "relative_time_s": 0.0,
+      "position_m": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 0.0
+    },
+    {
+      "index": 1,
+      "timestamp_us": 4823514776012,
+      "relative_time_s": 0.1,
+      "position_m": {
+        "x": 0.659024,
+        "y": 0.000131,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 0.659024
+    },
+    {
+      "index": 2,
+      "timestamp_us": 4823514876012,
+      "relative_time_s": 0.2,
+      "position_m": {
+        "x": 1.301505,
+        "y": 0.00052,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 1.301505
+    },
+    {
+      "index": 3,
+      "timestamp_us": 4823514976012,
+      "relative_time_s": 0.3,
+      "position_m": {
+        "x": 1.928056,
+        "y": 0.001153,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 1.928057
+    },
+    {
+      "index": 4,
+      "timestamp_us": 4823515076012,
+      "relative_time_s": 0.4,
+      "position_m": {
+        "x": 2.539407,
+        "y": 0.001988,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 2.539408
+    },
+    {
+      "index": 5,
+      "timestamp_us": 4823515176012,
+      "relative_time_s": 0.5,
+      "position_m": {
+        "x": 3.136465,
+        "y": 0.002991,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 3.136467
+    },
+    {
+      "index": 6,
+      "timestamp_us": 4823515276012,
+      "relative_time_s": 0.6,
+      "position_m": {
+        "x": 3.720109,
+        "y": 0.004133,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 3.720113
+    },
+    {
+      "index": 7,
+      "timestamp_us": 4823515376012,
+      "relative_time_s": 0.7,
+      "position_m": {
+        "x": 4.290942,
+        "y": 0.005392,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 4.290947
+    },
+    {
+      "index": 8,
+      "timestamp_us": 4823515476012,
+      "relative_time_s": 0.8,
+      "position_m": {
+        "x": 4.849148,
+        "y": 0.006746,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 4.849155
+    },
+    {
+      "index": 9,
+      "timestamp_us": 4823515576012,
+      "relative_time_s": 0.9,
+      "position_m": {
+        "x": 5.394439,
+        "y": 0.008168,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 5.394447
+    },
+    {
+      "index": 10,
+      "timestamp_us": 4823515676012,
+      "relative_time_s": 1.0,
+      "position_m": {
+        "x": 5.926333,
+        "y": 0.009622,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 5.926343
+    },
+    {
+      "index": 11,
+      "timestamp_us": 4823515776012,
+      "relative_time_s": 1.1,
+      "position_m": {
+        "x": 6.444486,
+        "y": 0.011088,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 6.444498
+    },
+    {
+      "index": 12,
+      "timestamp_us": 4823515876012,
+      "relative_time_s": 1.2,
+      "position_m": {
+        "x": 6.94876,
+        "y": 0.01255,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 6.948774
+    },
+    {
+      "index": 13,
+      "timestamp_us": 4823515976012,
+      "relative_time_s": 1.3,
+      "position_m": {
+        "x": 7.439126,
+        "y": 0.013975,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 7.439142
+    },
+    {
+      "index": 14,
+      "timestamp_us": 4823516076012,
+      "relative_time_s": 1.4,
+      "position_m": {
+        "x": 7.915518,
+        "y": 0.015337,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 7.915535
+    },
+    {
+      "index": 15,
+      "timestamp_us": 4823516176012,
+      "relative_time_s": 1.5,
+      "position_m": {
+        "x": 8.377728,
+        "y": 0.016612,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 8.377747
+    },
+    {
+      "index": 16,
+      "timestamp_us": 4823516276012,
+      "relative_time_s": 1.6,
+      "position_m": {
+        "x": 8.825478,
+        "y": 0.017784,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 8.825498
+    },
+    {
+      "index": 17,
+      "timestamp_us": 4823516376012,
+      "relative_time_s": 1.7,
+      "position_m": {
+        "x": 9.258649,
+        "y": 0.018837,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 9.25867
+    },
+    {
+      "index": 18,
+      "timestamp_us": 4823516476012,
+      "relative_time_s": 1.8,
+      "position_m": {
+        "x": 9.677425,
+        "y": 0.019761,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 9.677448
+    },
+    {
+      "index": 19,
+      "timestamp_us": 4823516576012,
+      "relative_time_s": 1.9,
+      "position_m": {
+        "x": 10.082176,
+        "y": 0.020551,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 10.0822
+    },
+    {
+      "index": 20,
+      "timestamp_us": 4823516676012,
+      "relative_time_s": 2.0,
+      "position_m": {
+        "x": 10.473241,
+        "y": 0.021195,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 10.473265
+    },
+    {
+      "index": 21,
+      "timestamp_us": 4823516776012,
+      "relative_time_s": 2.1,
+      "position_m": {
+        "x": 10.850868,
+        "y": 0.021696,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 10.850893
+    },
+    {
+      "index": 22,
+      "timestamp_us": 4823516876012,
+      "relative_time_s": 2.2,
+      "position_m": {
+        "x": 11.215197,
+        "y": 0.022057,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 11.215222
+    },
+    {
+      "index": 23,
+      "timestamp_us": 4823516976012,
+      "relative_time_s": 2.3,
+      "position_m": {
+        "x": 11.566282,
+        "y": 0.02229,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 11.566307
+    },
+    {
+      "index": 24,
+      "timestamp_us": 4823517076012,
+      "relative_time_s": 2.4,
+      "position_m": {
+        "x": 11.904107,
+        "y": 0.022406,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 11.904132
+    },
+    {
+      "index": 25,
+      "timestamp_us": 4823517176012,
+      "relative_time_s": 2.5,
+      "position_m": {
+        "x": 12.228486,
+        "y": 0.022417,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 12.228511
+    },
+    {
+      "index": 26,
+      "timestamp_us": 4823517276012,
+      "relative_time_s": 2.6,
+      "position_m": {
+        "x": 12.538911,
+        "y": 0.022338,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 12.538936
+    },
+    {
+      "index": 27,
+      "timestamp_us": 4823517376012,
+      "relative_time_s": 2.7,
+      "position_m": {
+        "x": 12.83455,
+        "y": 0.022183,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 12.834575
+    },
+    {
+      "index": 28,
+      "timestamp_us": 4823517476012,
+      "relative_time_s": 2.8,
+      "position_m": {
+        "x": 13.114415,
+        "y": 0.021959,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 13.11444
+    },
+    {
+      "index": 29,
+      "timestamp_us": 4823517576012,
+      "relative_time_s": 2.9,
+      "position_m": {
+        "x": 13.377561,
+        "y": 0.021683,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 13.377586
+    },
+    {
+      "index": 30,
+      "timestamp_us": 4823517676012,
+      "relative_time_s": 3.0,
+      "position_m": {
+        "x": 13.623306,
+        "y": 0.021372,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 13.623332
+    },
+    {
+      "index": 31,
+      "timestamp_us": 4823517776012,
+      "relative_time_s": 3.1,
+      "position_m": {
+        "x": 13.851329,
+        "y": 0.021038,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 13.851355
+    },
+    {
+      "index": 32,
+      "timestamp_us": 4823517876012,
+      "relative_time_s": 3.2,
+      "position_m": {
+        "x": 14.061589,
+        "y": 0.020693,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 14.061615
+    },
+    {
+      "index": 33,
+      "timestamp_us": 4823517976012,
+      "relative_time_s": 3.3,
+      "position_m": {
+        "x": 14.254186,
+        "y": 0.020348,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 14.254213
+    },
+    {
+      "index": 34,
+      "timestamp_us": 4823518076012,
+      "relative_time_s": 3.4,
+      "position_m": {
+        "x": 14.429189,
+        "y": 0.02001,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 14.429216
+    },
+    {
+      "index": 35,
+      "timestamp_us": 4823518176012,
+      "relative_time_s": 3.5,
+      "position_m": {
+        "x": 14.586579,
+        "y": 0.019687,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 14.586607
+    },
+    {
+      "index": 36,
+      "timestamp_us": 4823518276012,
+      "relative_time_s": 3.6,
+      "position_m": {
+        "x": 14.726313,
+        "y": 0.019385,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 14.726342
+    },
+    {
+      "index": 37,
+      "timestamp_us": 4823518376012,
+      "relative_time_s": 3.7,
+      "position_m": {
+        "x": 14.848556,
+        "y": 0.019109,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 14.848585
+    },
+    {
+      "index": 38,
+      "timestamp_us": 4823518476012,
+      "relative_time_s": 3.8,
+      "position_m": {
+        "x": 14.954021,
+        "y": 0.018861,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 14.95405
+    },
+    {
+      "index": 39,
+      "timestamp_us": 4823518576012,
+      "relative_time_s": 3.9,
+      "position_m": {
+        "x": 15.04431,
+        "y": 0.018643,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 15.044339
+    },
+    {
+      "index": 40,
+      "timestamp_us": 4823518676012,
+      "relative_time_s": 4.0,
+      "position_m": {
+        "x": 15.121677,
+        "y": 0.018452,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 15.121706
+    },
+    {
+      "index": 41,
+      "timestamp_us": 4823518776012,
+      "relative_time_s": 4.1,
+      "position_m": {
+        "x": 15.188397,
+        "y": 0.018283,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 15.188427
+    },
+    {
+      "index": 42,
+      "timestamp_us": 4823518876012,
+      "relative_time_s": 4.2,
+      "position_m": {
+        "x": 15.246278,
+        "y": 0.018134,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 15.246308
+    },
+    {
+      "index": 43,
+      "timestamp_us": 4823518976012,
+      "relative_time_s": 4.3,
+      "position_m": {
+        "x": 15.296437,
+        "y": 0.018003,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 15.296467
+    },
+    {
+      "index": 44,
+      "timestamp_us": 4823519076012,
+      "relative_time_s": 4.4,
+      "position_m": {
+        "x": 15.339375,
+        "y": 0.017889,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 15.339405
+    },
+    {
+      "index": 45,
+      "timestamp_us": 4823519176012,
+      "relative_time_s": 4.5,
+      "position_m": {
+        "x": 15.375071,
+        "y": 0.017794,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 15.375102
+    },
+    {
+      "index": 46,
+      "timestamp_us": 4823519276012,
+      "relative_time_s": 4.6,
+      "position_m": {
+        "x": 15.403215,
+        "y": 0.017718,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 15.403246
+    },
+    {
+      "index": 47,
+      "timestamp_us": 4823519376012,
+      "relative_time_s": 4.7,
+      "position_m": {
+        "x": 15.423587,
+        "y": 0.017662,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 15.423617
+    },
+    {
+      "index": 48,
+      "timestamp_us": 4823519476012,
+      "relative_time_s": 4.8,
+      "position_m": {
+        "x": 15.436611,
+        "y": 0.017626,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 15.436641
+    },
+    {
+      "index": 49,
+      "timestamp_us": 4823519576012,
+      "relative_time_s": 4.9,
+      "position_m": {
+        "x": 15.443848,
+        "y": 0.017606,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 15.443878
+    },
+    {
+      "index": 50,
+      "timestamp_us": 4823519676012,
+      "relative_time_s": 5.0,
+      "position_m": {
+        "x": 15.4478,
+        "y": 0.017595,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 15.44783
+    },
+    {
+      "index": 51,
+      "timestamp_us": 4823519776012,
+      "relative_time_s": 5.1,
+      "position_m": {
+        "x": 15.451119,
+        "y": 0.017586,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 15.45115
+    },
+    {
+      "index": 52,
+      "timestamp_us": 4823519876012,
+      "relative_time_s": 5.2,
+      "position_m": {
+        "x": 15.455381,
+        "y": 0.017574,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 15.455411
+    },
+    {
+      "index": 53,
+      "timestamp_us": 4823519976012,
+      "relative_time_s": 5.3,
+      "position_m": {
+        "x": 15.460638,
+        "y": 0.01756,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 15.460668
+    },
+    {
+      "index": 54,
+      "timestamp_us": 4823520076012,
+      "relative_time_s": 5.4,
+      "position_m": {
+        "x": 15.466211,
+        "y": 0.017544,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 15.466241
+    },
+    {
+      "index": 55,
+      "timestamp_us": 4823520176012,
+      "relative_time_s": 5.5,
+      "position_m": {
+        "x": 15.471552,
+        "y": 0.017529,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 15.471582
+    },
+    {
+      "index": 56,
+      "timestamp_us": 4823520276012,
+      "relative_time_s": 5.6,
+      "position_m": {
+        "x": 15.476695,
+        "y": 0.017515,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 15.476725
+    },
+    {
+      "index": 57,
+      "timestamp_us": 4823520376012,
+      "relative_time_s": 5.7,
+      "position_m": {
+        "x": 15.48233,
+        "y": 0.017499,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 15.48236
+    },
+    {
+      "index": 58,
+      "timestamp_us": 4823520476012,
+      "relative_time_s": 5.8,
+      "position_m": {
+        "x": 15.489578,
+        "y": 0.017479,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 15.489608
+    },
+    {
+      "index": 59,
+      "timestamp_us": 4823520576012,
+      "relative_time_s": 5.9,
+      "position_m": {
+        "x": 15.499768,
+        "y": 0.01745,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 15.499798
+    },
+    {
+      "index": 60,
+      "timestamp_us": 4823520676012,
+      "relative_time_s": 6.0,
+      "position_m": {
+        "x": 15.514288,
+        "y": 0.017409,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 15.514318
+    },
+    {
+      "index": 61,
+      "timestamp_us": 4823520776012,
+      "relative_time_s": 6.1,
+      "position_m": {
+        "x": 15.534618,
+        "y": 0.01735,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 15.534648
+    },
+    {
+      "index": 62,
+      "timestamp_us": 4823520876012,
+      "relative_time_s": 6.2,
+      "position_m": {
+        "x": 15.56254,
+        "y": 0.017268,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 15.562569
+    },
+    {
+      "index": 63,
+      "timestamp_us": 4823520976012,
+      "relative_time_s": 6.3,
+      "position_m": {
+        "x": 15.600247,
+        "y": 0.017154,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 15.600276
+    },
+    {
+      "index": 64,
+      "timestamp_us": 4823521076012,
+      "relative_time_s": 6.4,
+      "position_m": {
+        "x": 15.65022,
+        "y": 0.016997,
+        "z": null
+      },
+      "cumulative_distance_2d_m": 15.650249
+    }
+  ],
+  "segments": [
+    {
+      "index": 0,
+      "start_index": 0,
+      "end_index": 1,
+      "start_timestamp_us": 4823514676012,
+      "end_timestamp_us": 4823514776012,
+      "mid_timestamp_us": 4823514726012,
+      "relative_mid_time_s": 0.05,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.659024,
+        "y": 0.000131,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.659024,
+      "distance_3d_m": 0.659024,
+      "cumulative_distance_start_2d_m": 0.0,
+      "cumulative_distance_end_2d_m": 0.659024,
+      "velocity_mps": {
+        "x": 6.59024,
+        "y": 0.00131,
+        "z": 0.0,
+        "speed_2d": 6.59024,
+        "speed_3d": 6.59024,
+        "speed_kph": 23.724864,
+        "speed_mph": 14.741947
+      },
+      "heading_rad": 0.000199,
+      "heading_deg": 0.011389,
+      "acceleration_from_previous_mps2": null,
+      "heading_rate_from_previous_radps": null,
+      "curvature_from_previous_1pm": null,
+      "jerk_from_previous_mps3": null,
+      "motion_class": null
+    },
+    {
+      "index": 1,
+      "start_index": 1,
+      "end_index": 2,
+      "start_timestamp_us": 4823514776012,
+      "end_timestamp_us": 4823514876012,
+      "mid_timestamp_us": 4823514826012,
+      "relative_mid_time_s": 0.15,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.642481,
+        "y": 0.000389,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.642481,
+      "distance_3d_m": 0.642481,
+      "cumulative_distance_start_2d_m": 0.659024,
+      "cumulative_distance_end_2d_m": 1.301505,
+      "velocity_mps": {
+        "x": 6.42481,
+        "y": 0.00389,
+        "z": 0.0,
+        "speed_2d": 6.424811,
+        "speed_3d": 6.424811,
+        "speed_kph": 23.12932,
+        "speed_mph": 14.371893
+      },
+      "heading_rad": 0.000605,
+      "heading_deg": 0.034691,
+      "acceleration_from_previous_mps2": {
+        "x": -1.6543,
+        "y": 0.0258,
+        "z": 0.0,
+        "magnitude_2d": 1.654501,
+        "longitudinal": -1.65429,
+        "lateral": 0.026421
+      },
+      "heading_rate_from_previous_radps": 0.00406,
+      "curvature_from_previous_1pm": 0.000624,
+      "jerk_from_previous_mps3": null,
+      "motion_class": "braking"
+    },
+    {
+      "index": 2,
+      "start_index": 2,
+      "end_index": 3,
+      "start_timestamp_us": 4823514876012,
+      "end_timestamp_us": 4823514976012,
+      "mid_timestamp_us": 4823514926012,
+      "relative_mid_time_s": 0.25,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.626551,
+        "y": 0.000633,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.626551,
+      "distance_3d_m": 0.626551,
+      "cumulative_distance_start_2d_m": 1.301505,
+      "cumulative_distance_end_2d_m": 1.928057,
+      "velocity_mps": {
+        "x": 6.26551,
+        "y": 0.00633,
+        "z": 0.0,
+        "speed_2d": 6.265513,
+        "speed_3d": 6.265513,
+        "speed_kph": 22.555848,
+        "speed_mph": 14.015554
+      },
+      "heading_rad": 0.00101,
+      "heading_deg": 0.057885,
+      "acceleration_from_previous_mps2": {
+        "x": -1.593,
+        "y": 0.0244,
+        "z": 0.0,
+        "magnitude_2d": 1.593187,
+        "longitudinal": -1.59298,
+        "lateral": 0.025698
+      },
+      "heading_rate_from_previous_radps": 0.00405,
+      "curvature_from_previous_1pm": 0.000638,
+      "jerk_from_previous_mps3": {
+        "x": 0.613,
+        "y": -0.014,
+        "z": 0.0,
+        "magnitude_2d": 0.61316
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 3,
+      "start_index": 3,
+      "end_index": 4,
+      "start_timestamp_us": 4823514976012,
+      "end_timestamp_us": 4823515076012,
+      "mid_timestamp_us": 4823515026012,
+      "relative_mid_time_s": 0.35,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.611351,
+        "y": 0.000835,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.611352,
+      "distance_3d_m": 0.611352,
+      "cumulative_distance_start_2d_m": 1.928057,
+      "cumulative_distance_end_2d_m": 2.539408,
+      "velocity_mps": {
+        "x": 6.11351,
+        "y": 0.00835,
+        "z": 0.0,
+        "speed_2d": 6.113516,
+        "speed_3d": 6.113516,
+        "speed_kph": 22.008657,
+        "speed_mph": 13.675545
+      },
+      "heading_rad": 0.001366,
+      "heading_deg": 0.078256,
+      "acceleration_from_previous_mps2": {
+        "x": -1.52,
+        "y": 0.0202,
+        "z": 0.0,
+        "magnitude_2d": 1.520134,
+        "longitudinal": -1.51997,
+        "lateral": 0.022035
+      },
+      "heading_rate_from_previous_radps": 0.00356,
+      "curvature_from_previous_1pm": 0.000575,
+      "jerk_from_previous_mps3": {
+        "x": 0.73,
+        "y": -0.042,
+        "z": 0.0,
+        "magnitude_2d": 0.731207
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 4,
+      "start_index": 4,
+      "end_index": 5,
+      "start_timestamp_us": 4823515076012,
+      "end_timestamp_us": 4823515176012,
+      "mid_timestamp_us": 4823515126012,
+      "relative_mid_time_s": 0.45,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.597058,
+        "y": 0.001003,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.597059,
+      "distance_3d_m": 0.597059,
+      "cumulative_distance_start_2d_m": 2.539408,
+      "cumulative_distance_end_2d_m": 3.136467,
+      "velocity_mps": {
+        "x": 5.97058,
+        "y": 0.01003,
+        "z": 0.0,
+        "speed_2d": 5.970588,
+        "speed_3d": 5.970588,
+        "speed_kph": 21.494118,
+        "speed_mph": 13.355826
+      },
+      "heading_rad": 0.00168,
+      "heading_deg": 0.096251,
+      "acceleration_from_previous_mps2": {
+        "x": -1.4293,
+        "y": 0.0168,
+        "z": 0.0,
+        "magnitude_2d": 1.429399,
+        "longitudinal": -1.42928,
+        "lateral": 0.018972
+      },
+      "heading_rate_from_previous_radps": 0.00314,
+      "curvature_from_previous_1pm": 0.00052,
+      "jerk_from_previous_mps3": {
+        "x": 0.907,
+        "y": -0.034,
+        "z": 0.0,
+        "magnitude_2d": 0.907637
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 5,
+      "start_index": 5,
+      "end_index": 6,
+      "start_timestamp_us": 4823515176012,
+      "end_timestamp_us": 4823515276012,
+      "mid_timestamp_us": 4823515226012,
+      "relative_mid_time_s": 0.55,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.583644,
+        "y": 0.001142,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.583645,
+      "distance_3d_m": 0.583645,
+      "cumulative_distance_start_2d_m": 3.136467,
+      "cumulative_distance_end_2d_m": 3.720113,
+      "velocity_mps": {
+        "x": 5.83644,
+        "y": 0.01142,
+        "z": 0.0,
+        "speed_2d": 5.836451,
+        "speed_3d": 5.836451,
+        "speed_kph": 21.011224,
+        "speed_mph": 13.055769
+      },
+      "heading_rad": 0.001957,
+      "heading_deg": 0.112109,
+      "acceleration_from_previous_mps2": {
+        "x": -1.3414,
+        "y": 0.0139,
+        "z": 0.0,
+        "magnitude_2d": 1.341472,
+        "longitudinal": -1.34137,
+        "lateral": 0.016353
+      },
+      "heading_rate_from_previous_radps": 0.00277,
+      "curvature_from_previous_1pm": 0.000469,
+      "jerk_from_previous_mps3": {
+        "x": 0.879,
+        "y": -0.029,
+        "z": 0.0,
+        "magnitude_2d": 0.879478
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 6,
+      "start_index": 6,
+      "end_index": 7,
+      "start_timestamp_us": 4823515276012,
+      "end_timestamp_us": 4823515376012,
+      "mid_timestamp_us": 4823515326012,
+      "relative_mid_time_s": 0.65,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.570833,
+        "y": 0.001259,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.570834,
+      "distance_3d_m": 0.570834,
+      "cumulative_distance_start_2d_m": 3.720113,
+      "cumulative_distance_end_2d_m": 4.290947,
+      "velocity_mps": {
+        "x": 5.70833,
+        "y": 0.01259,
+        "z": 0.0,
+        "speed_2d": 5.708344,
+        "speed_3d": 5.708344,
+        "speed_kph": 20.550038,
+        "speed_mph": 12.769202
+      },
+      "heading_rad": 0.002206,
+      "heading_deg": 0.126368,
+      "acceleration_from_previous_mps2": {
+        "x": -1.2811,
+        "y": 0.0117,
+        "z": 0.0,
+        "magnitude_2d": 1.281153,
+        "longitudinal": -1.28107,
+        "lateral": 0.014373
+      },
+      "heading_rate_from_previous_radps": 0.00249,
+      "curvature_from_previous_1pm": 0.000431,
+      "jerk_from_previous_mps3": {
+        "x": 0.603,
+        "y": -0.022,
+        "z": 0.0,
+        "magnitude_2d": 0.603401
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 7,
+      "start_index": 7,
+      "end_index": 8,
+      "start_timestamp_us": 4823515376012,
+      "end_timestamp_us": 4823515476012,
+      "mid_timestamp_us": 4823515426012,
+      "relative_mid_time_s": 0.75,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.558206,
+        "y": 0.001354,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.558208,
+      "distance_3d_m": 0.558208,
+      "cumulative_distance_start_2d_m": 4.290947,
+      "cumulative_distance_end_2d_m": 4.849155,
+      "velocity_mps": {
+        "x": 5.58206,
+        "y": 0.01354,
+        "z": 0.0,
+        "speed_2d": 5.582076,
+        "speed_3d": 5.582076,
+        "speed_kph": 20.095475,
+        "speed_mph": 12.486749
+      },
+      "heading_rad": 0.002426,
+      "heading_deg": 0.138978,
+      "acceleration_from_previous_mps2": {
+        "x": -1.2627,
+        "y": 0.0095,
+        "z": 0.0,
+        "magnitude_2d": 1.262736,
+        "longitudinal": -1.26268,
+        "lateral": 0.012419
+      },
+      "heading_rate_from_previous_radps": 0.0022,
+      "curvature_from_previous_1pm": 0.00039,
+      "jerk_from_previous_mps3": {
+        "x": 0.184,
+        "y": -0.022,
+        "z": 0.0,
+        "magnitude_2d": 0.185311
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 8,
+      "start_index": 8,
+      "end_index": 9,
+      "start_timestamp_us": 4823515476012,
+      "end_timestamp_us": 4823515576012,
+      "mid_timestamp_us": 4823515526012,
+      "relative_mid_time_s": 0.85,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.545291,
+        "y": 0.001422,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.545293,
+      "distance_3d_m": 0.545293,
+      "cumulative_distance_start_2d_m": 4.849155,
+      "cumulative_distance_end_2d_m": 5.394447,
+      "velocity_mps": {
+        "x": 5.45291,
+        "y": 0.01422,
+        "z": 0.0,
+        "speed_2d": 5.452929,
+        "speed_3d": 5.452929,
+        "speed_kph": 19.630543,
+        "speed_mph": 12.197854
+      },
+      "heading_rad": 0.002608,
+      "heading_deg": 0.149415,
+      "acceleration_from_previous_mps2": {
+        "x": -1.2915,
+        "y": 0.0068,
+        "z": 0.0,
+        "magnitude_2d": 1.291518,
+        "longitudinal": -1.29147,
+        "lateral": 0.010042
+      },
+      "heading_rate_from_previous_radps": 0.00182,
+      "curvature_from_previous_1pm": 0.00033,
+      "jerk_from_previous_mps3": {
+        "x": -0.288,
+        "y": -0.027,
+        "z": 0.0,
+        "magnitude_2d": 0.289263
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 9,
+      "start_index": 9,
+      "end_index": 10,
+      "start_timestamp_us": 4823515576012,
+      "end_timestamp_us": 4823515676012,
+      "mid_timestamp_us": 4823515626012,
+      "relative_mid_time_s": 0.95,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.531894,
+        "y": 0.001454,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.531896,
+      "distance_3d_m": 0.531896,
+      "cumulative_distance_start_2d_m": 5.394447,
+      "cumulative_distance_end_2d_m": 5.926343,
+      "velocity_mps": {
+        "x": 5.31894,
+        "y": 0.01454,
+        "z": 0.0,
+        "speed_2d": 5.31896,
+        "speed_3d": 5.31896,
+        "speed_kph": 19.148256,
+        "speed_mph": 11.898174
+      },
+      "heading_rad": 0.002734,
+      "heading_deg": 0.156625,
+      "acceleration_from_previous_mps2": {
+        "x": -1.3397,
+        "y": 0.0032,
+        "z": 0.0,
+        "magnitude_2d": 1.339704,
+        "longitudinal": -1.33969,
+        "lateral": 0.006786
+      },
+      "heading_rate_from_previous_radps": 0.00126,
+      "curvature_from_previous_1pm": 0.000234,
+      "jerk_from_previous_mps3": {
+        "x": -0.482,
+        "y": -0.036,
+        "z": 0.0,
+        "magnitude_2d": 0.483343
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 10,
+      "start_index": 10,
+      "end_index": 11,
+      "start_timestamp_us": 4823515676012,
+      "end_timestamp_us": 4823515776012,
+      "mid_timestamp_us": 4823515726012,
+      "relative_mid_time_s": 1.05,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.518153,
+        "y": 0.001466,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.518155,
+      "distance_3d_m": 0.518155,
+      "cumulative_distance_start_2d_m": 5.926343,
+      "cumulative_distance_end_2d_m": 6.444498,
+      "velocity_mps": {
+        "x": 5.18153,
+        "y": 0.01466,
+        "z": 0.0,
+        "speed_2d": 5.181551,
+        "speed_3d": 5.181551,
+        "speed_kph": 18.653583,
+        "speed_mph": 11.590799
+      },
+      "heading_rad": 0.002829,
+      "heading_deg": 0.162105,
+      "acceleration_from_previous_mps2": {
+        "x": -1.3741,
+        "y": 0.0012,
+        "z": 0.0,
+        "magnitude_2d": 1.374101,
+        "longitudinal": -1.37409,
+        "lateral": 0.004988
+      },
+      "heading_rate_from_previous_radps": 0.00095,
+      "curvature_from_previous_1pm": 0.000181,
+      "jerk_from_previous_mps3": {
+        "x": -0.344,
+        "y": -0.02,
+        "z": 0.0,
+        "magnitude_2d": 0.344581
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 11,
+      "start_index": 11,
+      "end_index": 12,
+      "start_timestamp_us": 4823515776012,
+      "end_timestamp_us": 4823515876012,
+      "mid_timestamp_us": 4823515826012,
+      "relative_mid_time_s": 1.15,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.504274,
+        "y": 0.001462,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.504276,
+      "distance_3d_m": 0.504276,
+      "cumulative_distance_start_2d_m": 6.444498,
+      "cumulative_distance_end_2d_m": 6.948774,
+      "velocity_mps": {
+        "x": 5.04274,
+        "y": 0.01462,
+        "z": 0.0,
+        "speed_2d": 5.042761,
+        "speed_3d": 5.042761,
+        "speed_kph": 18.15394,
+        "speed_mph": 11.280336
+      },
+      "heading_rad": 0.002899,
+      "heading_deg": 0.166112,
+      "acceleration_from_previous_mps2": {
+        "x": -1.3879,
+        "y": -0.0004,
+        "z": 0.0,
+        "magnitude_2d": 1.3879,
+        "longitudinal": -1.3879,
+        "lateral": 0.003579
+      },
+      "heading_rate_from_previous_radps": 0.0007,
+      "curvature_from_previous_1pm": 0.000137,
+      "jerk_from_previous_mps3": {
+        "x": -0.138,
+        "y": -0.016,
+        "z": 0.0,
+        "magnitude_2d": 0.138924
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 12,
+      "start_index": 12,
+      "end_index": 13,
+      "start_timestamp_us": 4823515876012,
+      "end_timestamp_us": 4823515976012,
+      "mid_timestamp_us": 4823515926012,
+      "relative_mid_time_s": 1.25,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.490366,
+        "y": 0.001425,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.490368,
+      "distance_3d_m": 0.490368,
+      "cumulative_distance_start_2d_m": 6.948774,
+      "cumulative_distance_end_2d_m": 7.439142,
+      "velocity_mps": {
+        "x": 4.90366,
+        "y": 0.01425,
+        "z": 0.0,
+        "speed_2d": 4.903681,
+        "speed_3d": 4.903681,
+        "speed_kph": 17.653251,
+        "speed_mph": 10.969221
+      },
+      "heading_rad": 0.002906,
+      "heading_deg": 0.166501,
+      "acceleration_from_previous_mps2": {
+        "x": -1.3908,
+        "y": -0.0037,
+        "z": 0.0,
+        "magnitude_2d": 1.390805,
+        "longitudinal": -1.3908,
+        "lateral": 0.000348
+      },
+      "heading_rate_from_previous_radps": 7e-05,
+      "curvature_from_previous_1pm": 1.4e-05,
+      "jerk_from_previous_mps3": {
+        "x": -0.029,
+        "y": -0.033,
+        "z": 0.0,
+        "magnitude_2d": 0.043932
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 13,
+      "start_index": 13,
+      "end_index": 14,
+      "start_timestamp_us": 4823515976012,
+      "end_timestamp_us": 4823516076012,
+      "mid_timestamp_us": 4823516026012,
+      "relative_mid_time_s": 1.35,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.476392,
+        "y": 0.001362,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.476394,
+      "distance_3d_m": 0.476394,
+      "cumulative_distance_start_2d_m": 7.439142,
+      "cumulative_distance_end_2d_m": 7.915535,
+      "velocity_mps": {
+        "x": 4.76392,
+        "y": 0.01362,
+        "z": 0.0,
+        "speed_2d": 4.763939,
+        "speed_3d": 4.763939,
+        "speed_kph": 17.150182,
+        "speed_mph": 10.656629
+      },
+      "heading_rad": 0.002859,
+      "heading_deg": 0.163808,
+      "acceleration_from_previous_mps2": {
+        "x": -1.3974,
+        "y": -0.0063,
+        "z": 0.0,
+        "magnitude_2d": 1.397414,
+        "longitudinal": -1.39742,
+        "lateral": -0.002272
+      },
+      "heading_rate_from_previous_radps": -0.00047,
+      "curvature_from_previous_1pm": -9.7e-05,
+      "jerk_from_previous_mps3": {
+        "x": -0.066,
+        "y": -0.026,
+        "z": 0.0,
+        "magnitude_2d": 0.070937
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 14,
+      "start_index": 14,
+      "end_index": 15,
+      "start_timestamp_us": 4823516076012,
+      "end_timestamp_us": 4823516176012,
+      "mid_timestamp_us": 4823516126012,
+      "relative_mid_time_s": 1.45,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.46221,
+        "y": 0.001275,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.462212,
+      "distance_3d_m": 0.462212,
+      "cumulative_distance_start_2d_m": 7.915535,
+      "cumulative_distance_end_2d_m": 8.377747,
+      "velocity_mps": {
+        "x": 4.6221,
+        "y": 0.01275,
+        "z": 0.0,
+        "speed_2d": 4.622118,
+        "speed_3d": 4.622118,
+        "speed_kph": 16.639623,
+        "speed_mph": 10.339383
+      },
+      "heading_rad": 0.002758,
+      "heading_deg": 0.158049,
+      "acceleration_from_previous_mps2": {
+        "x": -1.4182,
+        "y": -0.0087,
+        "z": 0.0,
+        "magnitude_2d": 1.418227,
+        "longitudinal": -1.41821,
+        "lateral": -0.00474
+      },
+      "heading_rate_from_previous_radps": -0.00101,
+      "curvature_from_previous_1pm": -0.000215,
+      "jerk_from_previous_mps3": {
+        "x": -0.208,
+        "y": -0.024,
+        "z": 0.0,
+        "magnitude_2d": 0.20938
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 15,
+      "start_index": 15,
+      "end_index": 16,
+      "start_timestamp_us": 4823516176012,
+      "end_timestamp_us": 4823516276012,
+      "mid_timestamp_us": 4823516226012,
+      "relative_mid_time_s": 1.55,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.44775,
+        "y": 0.001172,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.447752,
+      "distance_3d_m": 0.447752,
+      "cumulative_distance_start_2d_m": 8.377747,
+      "cumulative_distance_end_2d_m": 8.825498,
+      "velocity_mps": {
+        "x": 4.4775,
+        "y": 0.01172,
+        "z": 0.0,
+        "speed_2d": 4.477515,
+        "speed_3d": 4.477515,
+        "speed_kph": 16.119055,
+        "speed_mph": 10.015917
+      },
+      "heading_rad": 0.002618,
+      "heading_deg": 0.149973,
+      "acceleration_from_previous_mps2": {
+        "x": -1.446,
+        "y": -0.0103,
+        "z": 0.0,
+        "magnitude_2d": 1.446037,
+        "longitudinal": -1.44603,
+        "lateral": -0.00637
+      },
+      "heading_rate_from_previous_radps": -0.0014,
+      "curvature_from_previous_1pm": -0.000308,
+      "jerk_from_previous_mps3": {
+        "x": -0.278,
+        "y": -0.016,
+        "z": 0.0,
+        "magnitude_2d": 0.27846
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 16,
+      "start_index": 16,
+      "end_index": 17,
+      "start_timestamp_us": 4823516276012,
+      "end_timestamp_us": 4823516376012,
+      "mid_timestamp_us": 4823516326012,
+      "relative_mid_time_s": 1.65,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.433171,
+        "y": 0.001053,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.433172,
+      "distance_3d_m": 0.433172,
+      "cumulative_distance_start_2d_m": 8.825498,
+      "cumulative_distance_end_2d_m": 9.25867,
+      "velocity_mps": {
+        "x": 4.33171,
+        "y": 0.01053,
+        "z": 0.0,
+        "speed_2d": 4.331723,
+        "speed_3d": 4.331723,
+        "speed_kph": 15.594202,
+        "speed_mph": 9.689788
+      },
+      "heading_rad": 0.002431,
+      "heading_deg": 0.139281,
+      "acceleration_from_previous_mps2": {
+        "x": -1.4579,
+        "y": -0.0119,
+        "z": 0.0,
+        "magnitude_2d": 1.457949,
+        "longitudinal": -1.45792,
+        "lateral": -0.008237
+      },
+      "heading_rate_from_previous_radps": -0.00187,
+      "curvature_from_previous_1pm": -0.000425,
+      "jerk_from_previous_mps3": {
+        "x": -0.119,
+        "y": -0.016,
+        "z": 0.0,
+        "magnitude_2d": 0.120071
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 17,
+      "start_index": 17,
+      "end_index": 18,
+      "start_timestamp_us": 4823516376012,
+      "end_timestamp_us": 4823516476012,
+      "mid_timestamp_us": 4823516426012,
+      "relative_mid_time_s": 1.75,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.418776,
+        "y": 0.000924,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.418777,
+      "distance_3d_m": 0.418777,
+      "cumulative_distance_start_2d_m": 9.25867,
+      "cumulative_distance_end_2d_m": 9.677448,
+      "velocity_mps": {
+        "x": 4.18776,
+        "y": 0.00924,
+        "z": 0.0,
+        "speed_2d": 4.18777,
+        "speed_3d": 4.18777,
+        "speed_kph": 15.075973,
+        "speed_mph": 9.367775
+      },
+      "heading_rad": 0.002206,
+      "heading_deg": 0.126419,
+      "acceleration_from_previous_mps2": {
+        "x": -1.4395,
+        "y": -0.0129,
+        "z": 0.0,
+        "magnitude_2d": 1.439558,
+        "longitudinal": -1.43953,
+        "lateral": -0.009584
+      },
+      "heading_rate_from_previous_radps": -0.00225,
+      "curvature_from_previous_1pm": -0.000528,
+      "jerk_from_previous_mps3": {
+        "x": 0.184,
+        "y": -0.01,
+        "z": 0.0,
+        "magnitude_2d": 0.184272
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 18,
+      "start_index": 18,
+      "end_index": 19,
+      "start_timestamp_us": 4823516476012,
+      "end_timestamp_us": 4823516576012,
+      "mid_timestamp_us": 4823516526012,
+      "relative_mid_time_s": 1.85,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.404751,
+        "y": 0.00079,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.404752,
+      "distance_3d_m": 0.404752,
+      "cumulative_distance_start_2d_m": 9.677448,
+      "cumulative_distance_end_2d_m": 10.0822,
+      "velocity_mps": {
+        "x": 4.04751,
+        "y": 0.0079,
+        "z": 0.0,
+        "speed_2d": 4.047518,
+        "speed_3d": 4.047518,
+        "speed_kph": 14.571064,
+        "speed_mph": 9.054039
+      },
+      "heading_rad": 0.001952,
+      "heading_deg": 0.111831,
+      "acceleration_from_previous_mps2": {
+        "x": -1.4025,
+        "y": -0.0134,
+        "z": 0.0,
+        "magnitude_2d": 1.402564,
+        "longitudinal": -1.40252,
+        "lateral": -0.010459
+      },
+      "heading_rate_from_previous_radps": -0.00254,
+      "curvature_from_previous_1pm": -0.000617,
+      "jerk_from_previous_mps3": {
+        "x": 0.37,
+        "y": -0.005,
+        "z": 0.0,
+        "magnitude_2d": 0.370034
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 19,
+      "start_index": 19,
+      "end_index": 20,
+      "start_timestamp_us": 4823516576012,
+      "end_timestamp_us": 4823516676012,
+      "mid_timestamp_us": 4823516626012,
+      "relative_mid_time_s": 1.95,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.391065,
+        "y": 0.000644,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.391066,
+      "distance_3d_m": 0.391066,
+      "cumulative_distance_start_2d_m": 10.0822,
+      "cumulative_distance_end_2d_m": 10.473265,
+      "velocity_mps": {
+        "x": 3.91065,
+        "y": 0.00644,
+        "z": 0.0,
+        "speed_2d": 3.910655,
+        "speed_3d": 3.910655,
+        "speed_kph": 14.078359,
+        "speed_mph": 8.747887
+      },
+      "heading_rad": 0.001647,
+      "heading_deg": 0.094354,
+      "acceleration_from_previous_mps2": {
+        "x": -1.3686,
+        "y": -0.0146,
+        "z": 0.0,
+        "magnitude_2d": 1.368678,
+        "longitudinal": -1.36863,
+        "lateral": -0.012136
+      },
+      "heading_rate_from_previous_radps": -0.00305,
+      "curvature_from_previous_1pm": -0.000767,
+      "jerk_from_previous_mps3": {
+        "x": 0.339,
+        "y": -0.012,
+        "z": 0.0,
+        "magnitude_2d": 0.339212
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 20,
+      "start_index": 20,
+      "end_index": 21,
+      "start_timestamp_us": 4823516676012,
+      "end_timestamp_us": 4823516776012,
+      "mid_timestamp_us": 4823516726012,
+      "relative_mid_time_s": 2.05,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.377627,
+        "y": 0.000501,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.377627,
+      "distance_3d_m": 0.377627,
+      "cumulative_distance_start_2d_m": 10.473265,
+      "cumulative_distance_end_2d_m": 10.850893,
+      "velocity_mps": {
+        "x": 3.77627,
+        "y": 0.00501,
+        "z": 0.0,
+        "speed_2d": 3.776273,
+        "speed_3d": 3.776273,
+        "speed_kph": 13.594584,
+        "speed_mph": 8.447283
+      },
+      "heading_rad": 0.001327,
+      "heading_deg": 0.076015,
+      "acceleration_from_previous_mps2": {
+        "x": -1.3438,
+        "y": -0.0143,
+        "z": 0.0,
+        "magnitude_2d": 1.343876,
+        "longitudinal": -1.34382,
+        "lateral": -0.012299
+      },
+      "heading_rate_from_previous_radps": -0.0032,
+      "curvature_from_previous_1pm": -0.000833,
+      "jerk_from_previous_mps3": {
+        "x": 0.248,
+        "y": 0.003,
+        "z": 0.0,
+        "magnitude_2d": 0.248018
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 21,
+      "start_index": 21,
+      "end_index": 22,
+      "start_timestamp_us": 4823516776012,
+      "end_timestamp_us": 4823516876012,
+      "mid_timestamp_us": 4823516826012,
+      "relative_mid_time_s": 2.15,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.364329,
+        "y": 0.000361,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.364329,
+      "distance_3d_m": 0.364329,
+      "cumulative_distance_start_2d_m": 10.850893,
+      "cumulative_distance_end_2d_m": 11.215222,
+      "velocity_mps": {
+        "x": 3.64329,
+        "y": 0.00361,
+        "z": 0.0,
+        "speed_2d": 3.643292,
+        "speed_3d": 3.643292,
+        "speed_kph": 13.11585,
+        "speed_mph": 8.149812
+      },
+      "heading_rad": 0.000991,
+      "heading_deg": 0.056772,
+      "acceleration_from_previous_mps2": {
+        "x": -1.3298,
+        "y": -0.014,
+        "z": 0.0,
+        "magnitude_2d": 1.329874,
+        "longitudinal": -1.32981,
+        "lateral": -0.012465
+      },
+      "heading_rate_from_previous_radps": -0.00336,
+      "curvature_from_previous_1pm": -0.000906,
+      "jerk_from_previous_mps3": {
+        "x": 0.14,
+        "y": 0.003,
+        "z": 0.0,
+        "magnitude_2d": 0.140032
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 22,
+      "start_index": 22,
+      "end_index": 23,
+      "start_timestamp_us": 4823516876012,
+      "end_timestamp_us": 4823516976012,
+      "mid_timestamp_us": 4823516926012,
+      "relative_mid_time_s": 2.25,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.351085,
+        "y": 0.000233,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.351085,
+      "distance_3d_m": 0.351085,
+      "cumulative_distance_start_2d_m": 11.215222,
+      "cumulative_distance_end_2d_m": 11.566307,
+      "velocity_mps": {
+        "x": 3.51085,
+        "y": 0.00233,
+        "z": 0.0,
+        "speed_2d": 3.510851,
+        "speed_3d": 3.510851,
+        "speed_kph": 12.639063,
+        "speed_mph": 7.85355
+      },
+      "heading_rad": 0.000664,
+      "heading_deg": 0.038025,
+      "acceleration_from_previous_mps2": {
+        "x": -1.3244,
+        "y": -0.0128,
+        "z": 0.0,
+        "magnitude_2d": 1.324462,
+        "longitudinal": -1.32441,
+        "lateral": -0.011697
+      },
+      "heading_rate_from_previous_radps": -0.00327,
+      "curvature_from_previous_1pm": -0.000914,
+      "jerk_from_previous_mps3": {
+        "x": 0.054,
+        "y": 0.012,
+        "z": 0.0,
+        "magnitude_2d": 0.055317
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 23,
+      "start_index": 23,
+      "end_index": 24,
+      "start_timestamp_us": 4823516976012,
+      "end_timestamp_us": 4823517076012,
+      "mid_timestamp_us": 4823517026012,
+      "relative_mid_time_s": 2.35,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.337825,
+        "y": 0.000116,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.337825,
+      "distance_3d_m": 0.337825,
+      "cumulative_distance_start_2d_m": 11.566307,
+      "cumulative_distance_end_2d_m": 11.904132,
+      "velocity_mps": {
+        "x": 3.37825,
+        "y": 0.00116,
+        "z": 0.0,
+        "speed_2d": 3.37825,
+        "speed_3d": 3.37825,
+        "speed_kph": 12.161701,
+        "speed_mph": 7.55693
+      },
+      "heading_rad": 0.000343,
+      "heading_deg": 0.019674,
+      "acceleration_from_previous_mps2": {
+        "x": -1.326,
+        "y": -0.0117,
+        "z": 0.0,
+        "magnitude_2d": 1.326052,
+        "longitudinal": -1.32601,
+        "lateral": -0.011057
+      },
+      "heading_rate_from_previous_radps": -0.00321,
+      "curvature_from_previous_1pm": -0.000932,
+      "jerk_from_previous_mps3": {
+        "x": -0.016,
+        "y": 0.011,
+        "z": 0.0,
+        "magnitude_2d": 0.019416
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 24,
+      "start_index": 24,
+      "end_index": 25,
+      "start_timestamp_us": 4823517076012,
+      "end_timestamp_us": 4823517176012,
+      "mid_timestamp_us": 4823517126012,
+      "relative_mid_time_s": 2.45,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.324379,
+        "y": 1.1e-05,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.324379,
+      "distance_3d_m": 0.324379,
+      "cumulative_distance_start_2d_m": 11.904132,
+      "cumulative_distance_end_2d_m": 12.228511,
+      "velocity_mps": {
+        "x": 3.24379,
+        "y": 0.00011,
+        "z": 0.0,
+        "speed_2d": 3.24379,
+        "speed_3d": 3.24379,
+        "speed_kph": 11.677644,
+        "speed_mph": 7.256152
+      },
+      "heading_rad": 3.4e-05,
+      "heading_deg": 0.001943,
+      "acceleration_from_previous_mps2": {
+        "x": -1.3446,
+        "y": -0.0105,
+        "z": 0.0,
+        "magnitude_2d": 1.344641,
+        "longitudinal": -1.3446,
+        "lateral": -0.010231
+      },
+      "heading_rate_from_previous_radps": -0.00309,
+      "curvature_from_previous_1pm": -0.000933,
+      "jerk_from_previous_mps3": {
+        "x": -0.186,
+        "y": 0.012,
+        "z": 0.0,
+        "magnitude_2d": 0.186387
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 25,
+      "start_index": 25,
+      "end_index": 26,
+      "start_timestamp_us": 4823517176012,
+      "end_timestamp_us": 4823517276012,
+      "mid_timestamp_us": 4823517226012,
+      "relative_mid_time_s": 2.55,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.310425,
+        "y": -7.9e-05,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.310425,
+      "distance_3d_m": 0.310425,
+      "cumulative_distance_start_2d_m": 12.228511,
+      "cumulative_distance_end_2d_m": 12.538936,
+      "velocity_mps": {
+        "x": 3.10425,
+        "y": -0.00079,
+        "z": 0.0,
+        "speed_2d": 3.10425,
+        "speed_3d": 3.10425,
+        "speed_kph": 11.1753,
+        "speed_mph": 6.94401
+      },
+      "heading_rad": -0.000254,
+      "heading_deg": -0.014581,
+      "acceleration_from_previous_mps2": {
+        "x": -1.3954,
+        "y": -0.009,
+        "z": 0.0,
+        "magnitude_2d": 1.395429,
+        "longitudinal": -1.3954,
+        "lateral": -0.009141
+      },
+      "heading_rate_from_previous_radps": -0.00288,
+      "curvature_from_previous_1pm": -0.000907,
+      "jerk_from_previous_mps3": {
+        "x": -0.508,
+        "y": 0.015,
+        "z": 0.0,
+        "magnitude_2d": 0.508221
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 26,
+      "start_index": 26,
+      "end_index": 27,
+      "start_timestamp_us": 4823517276012,
+      "end_timestamp_us": 4823517376012,
+      "mid_timestamp_us": 4823517326012,
+      "relative_mid_time_s": 2.65,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.295639,
+        "y": -0.000155,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.295639,
+      "distance_3d_m": 0.295639,
+      "cumulative_distance_start_2d_m": 12.538936,
+      "cumulative_distance_end_2d_m": 12.834575,
+      "velocity_mps": {
+        "x": 2.95639,
+        "y": -0.00155,
+        "z": 0.0,
+        "speed_2d": 2.95639,
+        "speed_3d": 2.95639,
+        "speed_kph": 10.643005,
+        "speed_mph": 6.613257
+      },
+      "heading_rad": -0.000524,
+      "heading_deg": -0.030039,
+      "acceleration_from_previous_mps2": {
+        "x": -1.4786,
+        "y": -0.0076,
+        "z": 0.0,
+        "magnitude_2d": 1.47862,
+        "longitudinal": -1.4786,
+        "lateral": -0.008182
+      },
+      "heading_rate_from_previous_radps": -0.0027,
+      "curvature_from_previous_1pm": -0.000891,
+      "jerk_from_previous_mps3": {
+        "x": -0.832,
+        "y": 0.014,
+        "z": 0.0,
+        "magnitude_2d": 0.832118
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 27,
+      "start_index": 27,
+      "end_index": 28,
+      "start_timestamp_us": 4823517376012,
+      "end_timestamp_us": 4823517476012,
+      "mid_timestamp_us": 4823517426012,
+      "relative_mid_time_s": 2.75,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.279865,
+        "y": -0.000224,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.279865,
+      "distance_3d_m": 0.279865,
+      "cumulative_distance_start_2d_m": 12.834575,
+      "cumulative_distance_end_2d_m": 13.11444,
+      "velocity_mps": {
+        "x": 2.79865,
+        "y": -0.00224,
+        "z": 0.0,
+        "speed_2d": 2.798651,
+        "speed_3d": 2.798651,
+        "speed_kph": 10.075143,
+        "speed_mph": 6.260404
+      },
+      "heading_rad": -0.0008,
+      "heading_deg": -0.045859,
+      "acceleration_from_previous_mps2": {
+        "x": -1.5774,
+        "y": -0.0069,
+        "z": 0.0,
+        "magnitude_2d": 1.577415,
+        "longitudinal": -1.57739,
+        "lateral": -0.007942
+      },
+      "heading_rate_from_previous_radps": -0.00276,
+      "curvature_from_previous_1pm": -0.000959,
+      "jerk_from_previous_mps3": {
+        "x": -0.988,
+        "y": 0.007,
+        "z": 0.0,
+        "magnitude_2d": 0.988025
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 28,
+      "start_index": 28,
+      "end_index": 29,
+      "start_timestamp_us": 4823517476012,
+      "end_timestamp_us": 4823517576012,
+      "mid_timestamp_us": 4823517526012,
+      "relative_mid_time_s": 2.85,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.263146,
+        "y": -0.000276,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.263146,
+      "distance_3d_m": 0.263146,
+      "cumulative_distance_start_2d_m": 13.11444,
+      "cumulative_distance_end_2d_m": 13.377586,
+      "velocity_mps": {
+        "x": 2.63146,
+        "y": -0.00276,
+        "z": 0.0,
+        "speed_2d": 2.631461,
+        "speed_3d": 2.631461,
+        "speed_kph": 9.473261,
+        "speed_mph": 5.886412
+      },
+      "heading_rad": -0.001049,
+      "heading_deg": -0.060095,
+      "acceleration_from_previous_mps2": {
+        "x": -1.6719,
+        "y": -0.0052,
+        "z": 0.0,
+        "magnitude_2d": 1.671908,
+        "longitudinal": -1.6719,
+        "lateral": -0.00676
+      },
+      "heading_rate_from_previous_radps": -0.00249,
+      "curvature_from_previous_1pm": -0.000917,
+      "jerk_from_previous_mps3": {
+        "x": -0.945,
+        "y": 0.017,
+        "z": 0.0,
+        "magnitude_2d": 0.945153
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 29,
+      "start_index": 29,
+      "end_index": 30,
+      "start_timestamp_us": 4823517576012,
+      "end_timestamp_us": 4823517676012,
+      "mid_timestamp_us": 4823517626012,
+      "relative_mid_time_s": 2.95,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.245745,
+        "y": -0.000311,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.245745,
+      "distance_3d_m": 0.245745,
+      "cumulative_distance_start_2d_m": 13.377586,
+      "cumulative_distance_end_2d_m": 13.623332,
+      "velocity_mps": {
+        "x": 2.45745,
+        "y": -0.00311,
+        "z": 0.0,
+        "speed_2d": 2.457452,
+        "speed_3d": 2.457452,
+        "speed_kph": 8.846827,
+        "speed_mph": 5.497163
+      },
+      "heading_rad": -0.001266,
+      "heading_deg": -0.07251,
+      "acceleration_from_previous_mps2": {
+        "x": -1.7401,
+        "y": -0.0035,
+        "z": 0.0,
+        "magnitude_2d": 1.740104,
+        "longitudinal": -1.74009,
+        "lateral": -0.005521
+      },
+      "heading_rate_from_previous_radps": -0.00217,
+      "curvature_from_previous_1pm": -0.000853,
+      "jerk_from_previous_mps3": {
+        "x": -0.682,
+        "y": 0.017,
+        "z": 0.0,
+        "magnitude_2d": 0.682212
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 30,
+      "start_index": 30,
+      "end_index": 31,
+      "start_timestamp_us": 4823517676012,
+      "end_timestamp_us": 4823517776012,
+      "mid_timestamp_us": 4823517726012,
+      "relative_mid_time_s": 3.05,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.228023,
+        "y": -0.000334,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.228023,
+      "distance_3d_m": 0.228023,
+      "cumulative_distance_start_2d_m": 13.623332,
+      "cumulative_distance_end_2d_m": 13.851355,
+      "velocity_mps": {
+        "x": 2.28023,
+        "y": -0.00334,
+        "z": 0.0,
+        "speed_2d": 2.280232,
+        "speed_3d": 2.280232,
+        "speed_kph": 8.208837,
+        "speed_mph": 5.100735
+      },
+      "heading_rad": -0.001465,
+      "heading_deg": -0.083925,
+      "acceleration_from_previous_mps2": {
+        "x": -1.7722,
+        "y": -0.0023,
+        "z": 0.0,
+        "magnitude_2d": 1.772201,
+        "longitudinal": -1.7722,
+        "lateral": -0.004714
+      },
+      "heading_rate_from_previous_radps": -0.00199,
+      "curvature_from_previous_1pm": -0.00084,
+      "jerk_from_previous_mps3": {
+        "x": -0.321,
+        "y": 0.012,
+        "z": 0.0,
+        "magnitude_2d": 0.321224
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 31,
+      "start_index": 31,
+      "end_index": 32,
+      "start_timestamp_us": 4823517776012,
+      "end_timestamp_us": 4823517876012,
+      "mid_timestamp_us": 4823517826012,
+      "relative_mid_time_s": 3.15,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.21026,
+        "y": -0.000345,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.21026,
+      "distance_3d_m": 0.21026,
+      "cumulative_distance_start_2d_m": 13.851355,
+      "cumulative_distance_end_2d_m": 14.061615,
+      "velocity_mps": {
+        "x": 2.1026,
+        "y": -0.00345,
+        "z": 0.0,
+        "speed_2d": 2.102603,
+        "speed_3d": 2.102603,
+        "speed_kph": 7.56937,
+        "speed_mph": 4.703389
+      },
+      "heading_rad": -0.001641,
+      "heading_deg": -0.094012,
+      "acceleration_from_previous_mps2": {
+        "x": -1.7763,
+        "y": -0.0011,
+        "z": 0.0,
+        "magnitude_2d": 1.7763,
+        "longitudinal": -1.77629,
+        "lateral": -0.003857
+      },
+      "heading_rate_from_previous_radps": -0.00176,
+      "curvature_from_previous_1pm": -0.000803,
+      "jerk_from_previous_mps3": {
+        "x": -0.041,
+        "y": 0.012,
+        "z": 0.0,
+        "magnitude_2d": 0.04272
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 32,
+      "start_index": 32,
+      "end_index": 33,
+      "start_timestamp_us": 4823517876012,
+      "end_timestamp_us": 4823517976012,
+      "mid_timestamp_us": 4823517926012,
+      "relative_mid_time_s": 3.25,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.192597,
+        "y": -0.000345,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.192597,
+      "distance_3d_m": 0.192597,
+      "cumulative_distance_start_2d_m": 14.061615,
+      "cumulative_distance_end_2d_m": 14.254213,
+      "velocity_mps": {
+        "x": 1.92597,
+        "y": -0.00345,
+        "z": 0.0,
+        "speed_2d": 1.925973,
+        "speed_3d": 1.925973,
+        "speed_kph": 6.933503,
+        "speed_mph": 4.308279
+      },
+      "heading_rad": -0.001791,
+      "heading_deg": -0.102634,
+      "acceleration_from_previous_mps2": {
+        "x": -1.7663,
+        "y": 0.0,
+        "z": 0.0,
+        "magnitude_2d": 1.7663,
+        "longitudinal": -1.7663,
+        "lateral": -0.003021
+      },
+      "heading_rate_from_previous_radps": -0.0015,
+      "curvature_from_previous_1pm": -0.000745,
+      "jerk_from_previous_mps3": {
+        "x": 0.1,
+        "y": 0.011,
+        "z": 0.0,
+        "magnitude_2d": 0.100603
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 33,
+      "start_index": 33,
+      "end_index": 34,
+      "start_timestamp_us": 4823517976012,
+      "end_timestamp_us": 4823518076012,
+      "mid_timestamp_us": 4823518026012,
+      "relative_mid_time_s": 3.35,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.175003,
+        "y": -0.000338,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.175003,
+      "distance_3d_m": 0.175003,
+      "cumulative_distance_start_2d_m": 14.254213,
+      "cumulative_distance_end_2d_m": 14.429216,
+      "velocity_mps": {
+        "x": 1.75003,
+        "y": -0.00338,
+        "z": 0.0,
+        "speed_2d": 1.750033,
+        "speed_3d": 1.750033,
+        "speed_kph": 6.30012,
+        "speed_mph": 3.914713
+      },
+      "heading_rad": -0.001931,
+      "heading_deg": -0.110661,
+      "acceleration_from_previous_mps2": {
+        "x": -1.7594,
+        "y": 0.0007,
+        "z": 0.0,
+        "magnitude_2d": 1.7594,
+        "longitudinal": -1.7594,
+        "lateral": -0.002573
+      },
+      "heading_rate_from_previous_radps": -0.0014,
+      "curvature_from_previous_1pm": -0.000762,
+      "jerk_from_previous_mps3": {
+        "x": 0.069,
+        "y": 0.007,
+        "z": 0.0,
+        "magnitude_2d": 0.069354
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 34,
+      "start_index": 34,
+      "end_index": 35,
+      "start_timestamp_us": 4823518076012,
+      "end_timestamp_us": 4823518176012,
+      "mid_timestamp_us": 4823518126012,
+      "relative_mid_time_s": 3.45,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.15739,
+        "y": -0.000323,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.15739,
+      "distance_3d_m": 0.15739,
+      "cumulative_distance_start_2d_m": 14.429216,
+      "cumulative_distance_end_2d_m": 14.586607,
+      "velocity_mps": {
+        "x": 1.5739,
+        "y": -0.00323,
+        "z": 0.0,
+        "speed_2d": 1.573903,
+        "speed_3d": 1.573903,
+        "speed_kph": 5.666052,
+        "speed_mph": 3.520721
+      },
+      "heading_rad": -0.002052,
+      "heading_deg": -0.117584,
+      "acceleration_from_previous_mps2": {
+        "x": -1.7613,
+        "y": 0.0015,
+        "z": 0.0,
+        "magnitude_2d": 1.761301,
+        "longitudinal": -1.7613,
+        "lateral": -0.002011
+      },
+      "heading_rate_from_previous_radps": -0.00121,
+      "curvature_from_previous_1pm": -0.000728,
+      "jerk_from_previous_mps3": {
+        "x": -0.019,
+        "y": 0.008,
+        "z": 0.0,
+        "magnitude_2d": 0.020616
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 35,
+      "start_index": 35,
+      "end_index": 36,
+      "start_timestamp_us": 4823518176012,
+      "end_timestamp_us": 4823518276012,
+      "mid_timestamp_us": 4823518226012,
+      "relative_mid_time_s": 3.55,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.139734,
+        "y": -0.000302,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.139734,
+      "distance_3d_m": 0.139734,
+      "cumulative_distance_start_2d_m": 14.586607,
+      "cumulative_distance_end_2d_m": 14.726342,
+      "velocity_mps": {
+        "x": 1.39734,
+        "y": -0.00302,
+        "z": 0.0,
+        "speed_2d": 1.397343,
+        "speed_3d": 1.397343,
+        "speed_kph": 5.030436,
+        "speed_mph": 3.125768
+      },
+      "heading_rad": -0.002161,
+      "heading_deg": -0.12383,
+      "acceleration_from_previous_mps2": {
+        "x": -1.7656,
+        "y": 0.0021,
+        "z": 0.0,
+        "magnitude_2d": 1.765601,
+        "longitudinal": -1.7656,
+        "lateral": -0.001619
+      },
+      "heading_rate_from_previous_radps": -0.00109,
+      "curvature_from_previous_1pm": -0.000734,
+      "jerk_from_previous_mps3": {
+        "x": -0.043,
+        "y": 0.006,
+        "z": 0.0,
+        "magnitude_2d": 0.043417
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 36,
+      "start_index": 36,
+      "end_index": 37,
+      "start_timestamp_us": 4823518276012,
+      "end_timestamp_us": 4823518376012,
+      "mid_timestamp_us": 4823518326012,
+      "relative_mid_time_s": 3.65,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.122243,
+        "y": -0.000276,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.122243,
+      "distance_3d_m": 0.122243,
+      "cumulative_distance_start_2d_m": 14.726342,
+      "cumulative_distance_end_2d_m": 14.848585,
+      "velocity_mps": {
+        "x": 1.22243,
+        "y": -0.00276,
+        "z": 0.0,
+        "speed_2d": 1.222433,
+        "speed_3d": 1.222433,
+        "speed_kph": 4.400759,
+        "speed_mph": 2.734505
+      },
+      "heading_rad": -0.002258,
+      "heading_deg": -0.129362,
+      "acceleration_from_previous_mps2": {
+        "x": -1.7491,
+        "y": 0.0026,
+        "z": 0.0,
+        "magnitude_2d": 1.749102,
+        "longitudinal": -1.7491,
+        "lateral": -0.001271
+      },
+      "heading_rate_from_previous_radps": -0.00097,
+      "curvature_from_previous_1pm": -0.000741,
+      "jerk_from_previous_mps3": {
+        "x": 0.165,
+        "y": 0.005,
+        "z": 0.0,
+        "magnitude_2d": 0.165076
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 37,
+      "start_index": 37,
+      "end_index": 38,
+      "start_timestamp_us": 4823518376012,
+      "end_timestamp_us": 4823518476012,
+      "mid_timestamp_us": 4823518426012,
+      "relative_mid_time_s": 3.75,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.105465,
+        "y": -0.000248,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.105465,
+      "distance_3d_m": 0.105465,
+      "cumulative_distance_start_2d_m": 14.848585,
+      "cumulative_distance_end_2d_m": 14.95405,
+      "velocity_mps": {
+        "x": 1.05465,
+        "y": -0.00248,
+        "z": 0.0,
+        "speed_2d": 1.054653,
+        "speed_3d": 1.054653,
+        "speed_kph": 3.79675,
+        "speed_mph": 2.359191
+      },
+      "heading_rad": -0.002351,
+      "heading_deg": -0.13473,
+      "acceleration_from_previous_mps2": {
+        "x": -1.6778,
+        "y": 0.0028,
+        "z": 0.0,
+        "magnitude_2d": 1.677802,
+        "longitudinal": -1.6778,
+        "lateral": -0.001059
+      },
+      "heading_rate_from_previous_radps": -0.00093,
+      "curvature_from_previous_1pm": -0.000817,
+      "jerk_from_previous_mps3": {
+        "x": 0.713,
+        "y": 0.002,
+        "z": 0.0,
+        "magnitude_2d": 0.713003
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 38,
+      "start_index": 38,
+      "end_index": 39,
+      "start_timestamp_us": 4823518476012,
+      "end_timestamp_us": 4823518576012,
+      "mid_timestamp_us": 4823518526012,
+      "relative_mid_time_s": 3.85,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.090289,
+        "y": -0.000218,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.090289,
+      "distance_3d_m": 0.090289,
+      "cumulative_distance_start_2d_m": 14.95405,
+      "cumulative_distance_end_2d_m": 15.044339,
+      "velocity_mps": {
+        "x": 0.90289,
+        "y": -0.00218,
+        "z": 0.0,
+        "speed_2d": 0.902893,
+        "speed_3d": 0.902893,
+        "speed_kph": 3.250413,
+        "speed_mph": 2.019713
+      },
+      "heading_rad": -0.002414,
+      "heading_deg": -0.138339,
+      "acceleration_from_previous_mps2": {
+        "x": -1.5176,
+        "y": 0.003,
+        "z": 0.0,
+        "magnitude_2d": 1.517603,
+        "longitudinal": -1.5176,
+        "lateral": -0.000617
+      },
+      "heading_rate_from_previous_radps": -0.00063,
+      "curvature_from_previous_1pm": -0.000644,
+      "jerk_from_previous_mps3": {
+        "x": 1.602,
+        "y": 0.002,
+        "z": 0.0,
+        "magnitude_2d": 1.602001
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 39,
+      "start_index": 39,
+      "end_index": 40,
+      "start_timestamp_us": 4823518576012,
+      "end_timestamp_us": 4823518676012,
+      "mid_timestamp_us": 4823518626012,
+      "relative_mid_time_s": 3.95,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.077367,
+        "y": -0.000191,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.077367,
+      "distance_3d_m": 0.077367,
+      "cumulative_distance_start_2d_m": 15.044339,
+      "cumulative_distance_end_2d_m": 15.121706,
+      "velocity_mps": {
+        "x": 0.77367,
+        "y": -0.00191,
+        "z": 0.0,
+        "speed_2d": 0.773672,
+        "speed_3d": 0.773672,
+        "speed_kph": 2.78522,
+        "speed_mph": 1.730656
+      },
+      "heading_rad": -0.002469,
+      "heading_deg": -0.141449,
+      "acceleration_from_previous_mps2": {
+        "x": -1.2922,
+        "y": 0.0027,
+        "z": 0.0,
+        "magnitude_2d": 1.292203,
+        "longitudinal": -1.29221,
+        "lateral": -0.000461
+      },
+      "heading_rate_from_previous_radps": -0.00055,
+      "curvature_from_previous_1pm": -0.000656,
+      "jerk_from_previous_mps3": {
+        "x": 2.254,
+        "y": -0.003,
+        "z": 0.0,
+        "magnitude_2d": 2.254002
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 40,
+      "start_index": 40,
+      "end_index": 41,
+      "start_timestamp_us": 4823518676012,
+      "end_timestamp_us": 4823518776012,
+      "mid_timestamp_us": 4823518726012,
+      "relative_mid_time_s": 4.05,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.06672,
+        "y": -0.000169,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.06672,
+      "distance_3d_m": 0.06672,
+      "cumulative_distance_start_2d_m": 15.121706,
+      "cumulative_distance_end_2d_m": 15.188427,
+      "velocity_mps": {
+        "x": 0.6672,
+        "y": -0.00169,
+        "z": 0.0,
+        "speed_2d": 0.667202,
+        "speed_3d": 0.667202,
+        "speed_kph": 2.401928,
+        "speed_mph": 1.492489
+      },
+      "heading_rad": -0.002533,
+      "heading_deg": -0.145128,
+      "acceleration_from_previous_mps2": {
+        "x": -1.0647,
+        "y": 0.0022,
+        "z": 0.0,
+        "magnitude_2d": 1.064702,
+        "longitudinal": -1.0647,
+        "lateral": -0.000461
+      },
+      "heading_rate_from_previous_radps": -0.00064,
+      "curvature_from_previous_1pm": -0.000888,
+      "jerk_from_previous_mps3": {
+        "x": 2.275,
+        "y": -0.005,
+        "z": 0.0,
+        "magnitude_2d": 2.275005
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 41,
+      "start_index": 41,
+      "end_index": 42,
+      "start_timestamp_us": 4823518776012,
+      "end_timestamp_us": 4823518876012,
+      "mid_timestamp_us": 4823518826012,
+      "relative_mid_time_s": 4.15,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.057881,
+        "y": -0.000149,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.057881,
+      "distance_3d_m": 0.057881,
+      "cumulative_distance_start_2d_m": 15.188427,
+      "cumulative_distance_end_2d_m": 15.246308,
+      "velocity_mps": {
+        "x": 0.57881,
+        "y": -0.00149,
+        "z": 0.0,
+        "speed_2d": 0.578812,
+        "speed_3d": 0.578812,
+        "speed_kph": 2.083723,
+        "speed_mph": 1.294765
+      },
+      "heading_rad": -0.002574,
+      "heading_deg": -0.147493,
+      "acceleration_from_previous_mps2": {
+        "x": -0.8839,
+        "y": 0.002,
+        "z": 0.0,
+        "magnitude_2d": 0.883902,
+        "longitudinal": -0.8839,
+        "lateral": -0.000255
+      },
+      "heading_rate_from_previous_radps": -0.00041,
+      "curvature_from_previous_1pm": -0.000658,
+      "jerk_from_previous_mps3": {
+        "x": 1.808,
+        "y": -0.002,
+        "z": 0.0,
+        "magnitude_2d": 1.808001
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 42,
+      "start_index": 42,
+      "end_index": 43,
+      "start_timestamp_us": 4823518876012,
+      "end_timestamp_us": 4823518976012,
+      "mid_timestamp_us": 4823518926012,
+      "relative_mid_time_s": 4.25,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.050159,
+        "y": -0.000131,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.050159,
+      "distance_3d_m": 0.050159,
+      "cumulative_distance_start_2d_m": 15.246308,
+      "cumulative_distance_end_2d_m": 15.296467,
+      "velocity_mps": {
+        "x": 0.50159,
+        "y": -0.00131,
+        "z": 0.0,
+        "speed_2d": 0.501592,
+        "speed_3d": 0.501592,
+        "speed_kph": 1.80573,
+        "speed_mph": 1.122029
+      },
+      "heading_rad": -0.002612,
+      "heading_deg": -0.149639,
+      "acceleration_from_previous_mps2": {
+        "x": -0.7722,
+        "y": 0.0018,
+        "z": 0.0,
+        "magnitude_2d": 0.772202,
+        "longitudinal": -0.7722,
+        "lateral": -0.000205
+      },
+      "heading_rate_from_previous_radps": -0.00038,
+      "curvature_from_previous_1pm": -0.000703,
+      "jerk_from_previous_mps3": {
+        "x": 1.117,
+        "y": -0.002,
+        "z": 0.0,
+        "magnitude_2d": 1.117002
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 43,
+      "start_index": 43,
+      "end_index": 44,
+      "start_timestamp_us": 4823518976012,
+      "end_timestamp_us": 4823519076012,
+      "mid_timestamp_us": 4823519026012,
+      "relative_mid_time_s": 4.35,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.042938,
+        "y": -0.000114,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.042938,
+      "distance_3d_m": 0.042938,
+      "cumulative_distance_start_2d_m": 15.296467,
+      "cumulative_distance_end_2d_m": 15.339405,
+      "velocity_mps": {
+        "x": 0.42938,
+        "y": -0.00114,
+        "z": 0.0,
+        "speed_2d": 0.429382,
+        "speed_3d": 0.429382,
+        "speed_kph": 1.545773,
+        "speed_mph": 0.960499
+      },
+      "heading_rad": -0.002655,
+      "heading_deg": -0.152119,
+      "acceleration_from_previous_mps2": {
+        "x": -0.7221,
+        "y": 0.0017,
+        "z": 0.0,
+        "magnitude_2d": 0.722102,
+        "longitudinal": -0.7221,
+        "lateral": -0.0002
+      },
+      "heading_rate_from_previous_radps": -0.00043,
+      "curvature_from_previous_1pm": -0.000924,
+      "jerk_from_previous_mps3": {
+        "x": 0.501,
+        "y": -0.001,
+        "z": 0.0,
+        "magnitude_2d": 0.501001
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 44,
+      "start_index": 44,
+      "end_index": 45,
+      "start_timestamp_us": 4823519076012,
+      "end_timestamp_us": 4823519176012,
+      "mid_timestamp_us": 4823519126012,
+      "relative_mid_time_s": 4.45,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.035696,
+        "y": -9.5e-05,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.035696,
+      "distance_3d_m": 0.035696,
+      "cumulative_distance_start_2d_m": 15.339405,
+      "cumulative_distance_end_2d_m": 15.375102,
+      "velocity_mps": {
+        "x": 0.35696,
+        "y": -0.00095,
+        "z": 0.0,
+        "speed_2d": 0.356961,
+        "speed_3d": 0.356961,
+        "speed_kph": 1.285061,
+        "speed_mph": 0.7985
+      },
+      "heading_rad": -0.002661,
+      "heading_deg": -0.152484,
+      "acceleration_from_previous_mps2": {
+        "x": -0.7242,
+        "y": 0.0019,
+        "z": 0.0,
+        "magnitude_2d": 0.724202,
+        "longitudinal": -0.72421,
+        "lateral": -2.4e-05
+      },
+      "heading_rate_from_previous_radps": -6e-05,
+      "curvature_from_previous_1pm": -0.000153,
+      "jerk_from_previous_mps3": {
+        "x": -0.021,
+        "y": 0.002,
+        "z": 0.0,
+        "magnitude_2d": 0.021095
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 45,
+      "start_index": 45,
+      "end_index": 46,
+      "start_timestamp_us": 4823519176012,
+      "end_timestamp_us": 4823519276012,
+      "mid_timestamp_us": 4823519226012,
+      "relative_mid_time_s": 4.55,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.028144,
+        "y": -7.6e-05,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.028144,
+      "distance_3d_m": 0.028144,
+      "cumulative_distance_start_2d_m": 15.375102,
+      "cumulative_distance_end_2d_m": 15.403246,
+      "velocity_mps": {
+        "x": 0.28144,
+        "y": -0.00076,
+        "z": 0.0,
+        "speed_2d": 0.281441,
+        "speed_3d": 0.281441,
+        "speed_kph": 1.013188,
+        "speed_mph": 0.629566
+      },
+      "heading_rad": -0.0027,
+      "heading_deg": -0.154721,
+      "acceleration_from_previous_mps2": {
+        "x": -0.7552,
+        "y": 0.0019,
+        "z": 0.0,
+        "magnitude_2d": 0.755202,
+        "longitudinal": -0.7552,
+        "lateral": -0.000124
+      },
+      "heading_rate_from_previous_radps": -0.00039,
+      "curvature_from_previous_1pm": -0.001222,
+      "jerk_from_previous_mps3": {
+        "x": -0.31,
+        "y": 0.0,
+        "z": 0.0,
+        "magnitude_2d": 0.31
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 46,
+      "start_index": 46,
+      "end_index": 47,
+      "start_timestamp_us": 4823519276012,
+      "end_timestamp_us": 4823519376012,
+      "mid_timestamp_us": 4823519326012,
+      "relative_mid_time_s": 4.65,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.020372,
+        "y": -5.6e-05,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.020372,
+      "distance_3d_m": 0.020372,
+      "cumulative_distance_start_2d_m": 15.403246,
+      "cumulative_distance_end_2d_m": 15.423617,
+      "velocity_mps": {
+        "x": 0.20372,
+        "y": -0.00056,
+        "z": 0.0,
+        "speed_2d": 0.203721,
+        "speed_3d": 0.203721,
+        "speed_kph": 0.733395,
+        "speed_mph": 0.45571
+      },
+      "heading_rad": -0.002749,
+      "heading_deg": -0.157498,
+      "acceleration_from_previous_mps2": {
+        "x": -0.7772,
+        "y": 0.002,
+        "z": 0.0,
+        "magnitude_2d": 0.777203,
+        "longitudinal": -0.7772,
+        "lateral": -0.000119
+      },
+      "heading_rate_from_previous_radps": -0.00049,
+      "curvature_from_previous_1pm": -0.00202,
+      "jerk_from_previous_mps3": {
+        "x": -0.22,
+        "y": 0.001,
+        "z": 0.0,
+        "magnitude_2d": 0.220002
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 47,
+      "start_index": 47,
+      "end_index": 48,
+      "start_timestamp_us": 4823519376012,
+      "end_timestamp_us": 4823519476012,
+      "mid_timestamp_us": 4823519426012,
+      "relative_mid_time_s": 4.75,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.013024,
+        "y": -3.6e-05,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.013024,
+      "distance_3d_m": 0.013024,
+      "cumulative_distance_start_2d_m": 15.423617,
+      "cumulative_distance_end_2d_m": 15.436641,
+      "velocity_mps": {
+        "x": 0.13024,
+        "y": -0.00036,
+        "z": 0.0,
+        "speed_2d": 0.13024,
+        "speed_3d": 0.13024,
+        "speed_kph": 0.468866,
+        "speed_mph": 0.29134
+      },
+      "heading_rad": -0.002764,
+      "heading_deg": -0.158372,
+      "acceleration_from_previous_mps2": {
+        "x": -0.7348,
+        "y": 0.002,
+        "z": 0.0,
+        "magnitude_2d": 0.734803,
+        "longitudinal": -0.73481,
+        "lateral": -2.5e-05
+      },
+      "heading_rate_from_previous_radps": -0.00015,
+      "curvature_from_previous_1pm": -0.000898,
+      "jerk_from_previous_mps3": {
+        "x": 0.424,
+        "y": 0.0,
+        "z": 0.0,
+        "magnitude_2d": 0.424
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 48,
+      "start_index": 48,
+      "end_index": 49,
+      "start_timestamp_us": 4823519476012,
+      "end_timestamp_us": 4823519576012,
+      "mid_timestamp_us": 4823519526012,
+      "relative_mid_time_s": 4.85,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.007237,
+        "y": -2e-05,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.007237,
+      "distance_3d_m": 0.007237,
+      "cumulative_distance_start_2d_m": 15.436641,
+      "cumulative_distance_end_2d_m": 15.443878,
+      "velocity_mps": {
+        "x": 0.07237,
+        "y": -0.0002,
+        "z": 0.0,
+        "speed_2d": 0.07237,
+        "speed_3d": 0.07237,
+        "speed_kph": 0.260533,
+        "speed_mph": 0.161888
+      },
+      "heading_rad": -0.002764,
+      "heading_deg": -0.158341,
+      "acceleration_from_previous_mps2": {
+        "x": -0.5787,
+        "y": 0.0016,
+        "z": 0.0,
+        "magnitude_2d": 0.578702,
+        "longitudinal": -0.5787,
+        "lateral": 0.0
+      },
+      "heading_rate_from_previous_radps": 0.0,
+      "curvature_from_previous_1pm": 0.0,
+      "jerk_from_previous_mps3": {
+        "x": 1.561,
+        "y": -0.004,
+        "z": 0.0,
+        "magnitude_2d": 1.561005
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 49,
+      "start_index": 49,
+      "end_index": 50,
+      "start_timestamp_us": 4823519576012,
+      "end_timestamp_us": 4823519676012,
+      "mid_timestamp_us": 4823519626012,
+      "relative_mid_time_s": 4.95,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.003952,
+        "y": -1.1e-05,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.003952,
+      "distance_3d_m": 0.003952,
+      "cumulative_distance_start_2d_m": 15.443878,
+      "cumulative_distance_end_2d_m": 15.44783,
+      "velocity_mps": {
+        "x": 0.03952,
+        "y": -0.00011,
+        "z": 0.0,
+        "speed_2d": 0.03952,
+        "speed_3d": 0.03952,
+        "speed_kph": 0.142273,
+        "speed_mph": 0.088404
+      },
+      "heading_rad": -0.002783,
+      "heading_deg": -0.159477,
+      "acceleration_from_previous_mps2": {
+        "x": -0.3285,
+        "y": 0.0009,
+        "z": 0.0,
+        "magnitude_2d": 0.328501,
+        "longitudinal": -0.3285,
+        "lateral": -1.1e-05
+      },
+      "heading_rate_from_previous_radps": -0.00019,
+      "curvature_from_previous_1pm": -0.003396,
+      "jerk_from_previous_mps3": {
+        "x": 2.502,
+        "y": -0.007,
+        "z": 0.0,
+        "magnitude_2d": 2.50201
+      },
+      "motion_class": "braking"
+    },
+    {
+      "index": 50,
+      "start_index": 50,
+      "end_index": 51,
+      "start_timestamp_us": 4823519676012,
+      "end_timestamp_us": 4823519776012,
+      "mid_timestamp_us": 4823519726012,
+      "relative_mid_time_s": 5.05,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.003319,
+        "y": -9e-06,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.003319,
+      "distance_3d_m": 0.003319,
+      "cumulative_distance_start_2d_m": 15.44783,
+      "cumulative_distance_end_2d_m": 15.45115,
+      "velocity_mps": {
+        "x": 0.03319,
+        "y": -9e-05,
+        "z": 0.0,
+        "speed_2d": 0.03319,
+        "speed_3d": 0.03319,
+        "speed_kph": 0.119484,
+        "speed_mph": 0.074244
+      },
+      "heading_rad": -0.002712,
+      "heading_deg": -0.155366,
+      "acceleration_from_previous_mps2": {
+        "x": -0.0633,
+        "y": 0.0002,
+        "z": 0.0,
+        "magnitude_2d": 0.0633,
+        "longitudinal": -0.0633,
+        "lateral": 2.6e-05
+      },
+      "heading_rate_from_previous_radps": 0.00071,
+      "curvature_from_previous_1pm": 0.019527,
+      "jerk_from_previous_mps3": {
+        "x": 2.652,
+        "y": -0.007,
+        "z": 0.0,
+        "magnitude_2d": 2.652009
+      },
+      "motion_class": "coasting"
+    },
+    {
+      "index": 51,
+      "start_index": 51,
+      "end_index": 52,
+      "start_timestamp_us": 4823519776012,
+      "end_timestamp_us": 4823519876012,
+      "mid_timestamp_us": 4823519826012,
+      "relative_mid_time_s": 5.15,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.004262,
+        "y": -1.2e-05,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.004262,
+      "distance_3d_m": 0.004262,
+      "cumulative_distance_start_2d_m": 15.45115,
+      "cumulative_distance_end_2d_m": 15.455411,
+      "velocity_mps": {
+        "x": 0.04262,
+        "y": -0.00012,
+        "z": 0.0,
+        "speed_2d": 0.04262,
+        "speed_3d": 0.04262,
+        "speed_kph": 0.153433,
+        "speed_mph": 0.095339
+      },
+      "heading_rad": -0.002816,
+      "heading_deg": -0.16132,
+      "acceleration_from_previous_mps2": {
+        "x": 0.0943,
+        "y": -0.0003,
+        "z": 0.0,
+        "magnitude_2d": 0.0943,
+        "longitudinal": 0.0943,
+        "lateral": -3.9e-05
+      },
+      "heading_rate_from_previous_radps": -0.00104,
+      "curvature_from_previous_1pm": -0.027437,
+      "jerk_from_previous_mps3": {
+        "x": 1.576,
+        "y": -0.005,
+        "z": 0.0,
+        "magnitude_2d": 1.576008
+      },
+      "motion_class": "coasting"
+    },
+    {
+      "index": 52,
+      "start_index": 52,
+      "end_index": 53,
+      "start_timestamp_us": 4823519876012,
+      "end_timestamp_us": 4823519976012,
+      "mid_timestamp_us": 4823519926012,
+      "relative_mid_time_s": 5.25,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.005257,
+        "y": -1.4e-05,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.005257,
+      "distance_3d_m": 0.005257,
+      "cumulative_distance_start_2d_m": 15.455411,
+      "cumulative_distance_end_2d_m": 15.460668,
+      "velocity_mps": {
+        "x": 0.05257,
+        "y": -0.00014,
+        "z": 0.0,
+        "speed_2d": 0.05257,
+        "speed_3d": 0.05257,
+        "speed_kph": 0.189253,
+        "speed_mph": 0.117596
+      },
+      "heading_rad": -0.002663,
+      "heading_deg": -0.152585,
+      "acceleration_from_previous_mps2": {
+        "x": 0.0995,
+        "y": -0.0002,
+        "z": 0.0,
+        "magnitude_2d": 0.0995,
+        "longitudinal": 0.0995,
+        "lateral": 7.3e-05
+      },
+      "heading_rate_from_previous_radps": 0.00153,
+      "curvature_from_previous_1pm": 0.03215,
+      "jerk_from_previous_mps3": {
+        "x": 0.052,
+        "y": 0.001,
+        "z": 0.0,
+        "magnitude_2d": 0.05201
+      },
+      "motion_class": "coasting"
+    },
+    {
+      "index": 53,
+      "start_index": 53,
+      "end_index": 54,
+      "start_timestamp_us": 4823519976012,
+      "end_timestamp_us": 4823520076012,
+      "mid_timestamp_us": 4823520026012,
+      "relative_mid_time_s": 5.35,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.005573,
+        "y": -1.6e-05,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.005573,
+      "distance_3d_m": 0.005573,
+      "cumulative_distance_start_2d_m": 15.460668,
+      "cumulative_distance_end_2d_m": 15.466241,
+      "velocity_mps": {
+        "x": 0.05573,
+        "y": -0.00016,
+        "z": 0.0,
+        "speed_2d": 0.05573,
+        "speed_3d": 0.05573,
+        "speed_kph": 0.200629,
+        "speed_mph": 0.124665
+      },
+      "heading_rad": -0.002871,
+      "heading_deg": -0.164495,
+      "acceleration_from_previous_mps2": {
+        "x": 0.0316,
+        "y": -0.0002,
+        "z": 0.0,
+        "magnitude_2d": 0.031601,
+        "longitudinal": 0.0316,
+        "lateral": -0.000113
+      },
+      "heading_rate_from_previous_radps": -0.00208,
+      "curvature_from_previous_1pm": -0.038412,
+      "jerk_from_previous_mps3": {
+        "x": -0.679,
+        "y": 0.0,
+        "z": 0.0,
+        "magnitude_2d": 0.679
+      },
+      "motion_class": "coasting"
+    },
+    {
+      "index": 54,
+      "start_index": 54,
+      "end_index": 55,
+      "start_timestamp_us": 4823520076012,
+      "end_timestamp_us": 4823520176012,
+      "mid_timestamp_us": 4823520126012,
+      "relative_mid_time_s": 5.45,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.005341,
+        "y": -1.5e-05,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.005341,
+      "distance_3d_m": 0.005341,
+      "cumulative_distance_start_2d_m": 15.466241,
+      "cumulative_distance_end_2d_m": 15.471582,
+      "velocity_mps": {
+        "x": 0.05341,
+        "y": -0.00015,
+        "z": 0.0,
+        "speed_2d": 0.05341,
+        "speed_3d": 0.05341,
+        "speed_kph": 0.192277,
+        "speed_mph": 0.119475
+      },
+      "heading_rad": -0.002808,
+      "heading_deg": -0.160913,
+      "acceleration_from_previous_mps2": {
+        "x": -0.0232,
+        "y": 0.0001,
+        "z": 0.0,
+        "magnitude_2d": 0.0232,
+        "longitudinal": -0.0232,
+        "lateral": 3.4e-05
+      },
+      "heading_rate_from_previous_radps": 0.00063,
+      "curvature_from_previous_1pm": 0.011545,
+      "jerk_from_previous_mps3": {
+        "x": -0.548,
+        "y": 0.003,
+        "z": 0.0,
+        "magnitude_2d": 0.548008
+      },
+      "motion_class": "coasting"
+    },
+    {
+      "index": 55,
+      "start_index": 55,
+      "end_index": 56,
+      "start_timestamp_us": 4823520176012,
+      "end_timestamp_us": 4823520276012,
+      "mid_timestamp_us": 4823520226012,
+      "relative_mid_time_s": 5.55,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.005143,
+        "y": -1.4e-05,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.005143,
+      "distance_3d_m": 0.005143,
+      "cumulative_distance_start_2d_m": 15.471582,
+      "cumulative_distance_end_2d_m": 15.476725,
+      "velocity_mps": {
+        "x": 0.05143,
+        "y": -0.00014,
+        "z": 0.0,
+        "speed_2d": 0.05143,
+        "speed_3d": 0.05143,
+        "speed_kph": 0.185149,
+        "speed_mph": 0.115046
+      },
+      "heading_rad": -0.002722,
+      "heading_deg": -0.155967,
+      "acceleration_from_previous_mps2": {
+        "x": -0.0198,
+        "y": 0.0001,
+        "z": 0.0,
+        "magnitude_2d": 0.0198,
+        "longitudinal": -0.0198,
+        "lateral": 4.5e-05
+      },
+      "heading_rate_from_previous_radps": 0.00086,
+      "curvature_from_previous_1pm": 0.016406,
+      "jerk_from_previous_mps3": {
+        "x": 0.034,
+        "y": 0.0,
+        "z": 0.0,
+        "magnitude_2d": 0.034
+      },
+      "motion_class": "coasting"
+    },
+    {
+      "index": 56,
+      "start_index": 56,
+      "end_index": 57,
+      "start_timestamp_us": 4823520276012,
+      "end_timestamp_us": 4823520376012,
+      "mid_timestamp_us": 4823520326012,
+      "relative_mid_time_s": 5.65,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.005635,
+        "y": -1.6e-05,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.005635,
+      "distance_3d_m": 0.005635,
+      "cumulative_distance_start_2d_m": 15.476725,
+      "cumulative_distance_end_2d_m": 15.48236,
+      "velocity_mps": {
+        "x": 0.05635,
+        "y": -0.00016,
+        "z": 0.0,
+        "speed_2d": 0.05635,
+        "speed_3d": 0.05635,
+        "speed_kph": 0.202861,
+        "speed_mph": 0.126052
+      },
+      "heading_rad": -0.002839,
+      "heading_deg": -0.162685,
+      "acceleration_from_previous_mps2": {
+        "x": 0.0492,
+        "y": -0.0002,
+        "z": 0.0,
+        "magnitude_2d": 0.0492,
+        "longitudinal": 0.0492,
+        "lateral": -6.3e-05
+      },
+      "heading_rate_from_previous_radps": -0.00117,
+      "curvature_from_previous_1pm": -0.021711,
+      "jerk_from_previous_mps3": {
+        "x": 0.69,
+        "y": -0.003,
+        "z": 0.0,
+        "magnitude_2d": 0.690007
+      },
+      "motion_class": "coasting"
+    },
+    {
+      "index": 57,
+      "start_index": 57,
+      "end_index": 58,
+      "start_timestamp_us": 4823520376012,
+      "end_timestamp_us": 4823520476012,
+      "mid_timestamp_us": 4823520426012,
+      "relative_mid_time_s": 5.75,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.007248,
+        "y": -2e-05,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.007248,
+      "distance_3d_m": 0.007248,
+      "cumulative_distance_start_2d_m": 15.48236,
+      "cumulative_distance_end_2d_m": 15.489608,
+      "velocity_mps": {
+        "x": 0.07248,
+        "y": -0.0002,
+        "z": 0.0,
+        "speed_2d": 0.07248,
+        "speed_3d": 0.07248,
+        "speed_kph": 0.260929,
+        "speed_mph": 0.162134
+      },
+      "heading_rad": -0.002759,
+      "heading_deg": -0.158101,
+      "acceleration_from_previous_mps2": {
+        "x": 0.1613,
+        "y": -0.0004,
+        "z": 0.0,
+        "magnitude_2d": 0.1613,
+        "longitudinal": 0.1613,
+        "lateral": 5.2e-05
+      },
+      "heading_rate_from_previous_radps": 0.0008,
+      "curvature_from_previous_1pm": 0.012419,
+      "jerk_from_previous_mps3": {
+        "x": 1.121,
+        "y": -0.002,
+        "z": 0.0,
+        "magnitude_2d": 1.121002
+      },
+      "motion_class": "accelerating"
+    },
+    {
+      "index": 58,
+      "start_index": 58,
+      "end_index": 59,
+      "start_timestamp_us": 4823520476012,
+      "end_timestamp_us": 4823520576012,
+      "mid_timestamp_us": 4823520526012,
+      "relative_mid_time_s": 5.85,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.01019,
+        "y": -2.9e-05,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.01019,
+      "distance_3d_m": 0.01019,
+      "cumulative_distance_start_2d_m": 15.489608,
+      "cumulative_distance_end_2d_m": 15.499798,
+      "velocity_mps": {
+        "x": 0.1019,
+        "y": -0.00029,
+        "z": 0.0,
+        "speed_2d": 0.1019,
+        "speed_3d": 0.1019,
+        "speed_kph": 0.366841,
+        "speed_mph": 0.227945
+      },
+      "heading_rad": -0.002846,
+      "heading_deg": -0.163059,
+      "acceleration_from_previous_mps2": {
+        "x": 0.2942,
+        "y": -0.0009,
+        "z": 0.0,
+        "magnitude_2d": 0.294201,
+        "longitudinal": 0.2942,
+        "lateral": -7.6e-05
+      },
+      "heading_rate_from_previous_radps": -0.00087,
+      "curvature_from_previous_1pm": -0.009978,
+      "jerk_from_previous_mps3": {
+        "x": 1.329,
+        "y": -0.005,
+        "z": 0.0,
+        "magnitude_2d": 1.329009
+      },
+      "motion_class": "accelerating"
+    },
+    {
+      "index": 59,
+      "start_index": 59,
+      "end_index": 60,
+      "start_timestamp_us": 4823520576012,
+      "end_timestamp_us": 4823520676012,
+      "mid_timestamp_us": 4823520626012,
+      "relative_mid_time_s": 5.95,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.01452,
+        "y": -4.1e-05,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.01452,
+      "distance_3d_m": 0.01452,
+      "cumulative_distance_start_2d_m": 15.499798,
+      "cumulative_distance_end_2d_m": 15.514318,
+      "velocity_mps": {
+        "x": 0.1452,
+        "y": -0.00041,
+        "z": 0.0,
+        "speed_2d": 0.145201,
+        "speed_3d": 0.145201,
+        "speed_kph": 0.522722,
+        "speed_mph": 0.324804
+      },
+      "heading_rad": -0.002824,
+      "heading_deg": -0.161785,
+      "acceleration_from_previous_mps2": {
+        "x": 0.433,
+        "y": -0.0012,
+        "z": 0.0,
+        "magnitude_2d": 0.433002,
+        "longitudinal": 0.43301,
+        "lateral": 2.7e-05
+      },
+      "heading_rate_from_previous_radps": 0.00022,
+      "curvature_from_previous_1pm": 0.001781,
+      "jerk_from_previous_mps3": {
+        "x": 1.388,
+        "y": -0.003,
+        "z": 0.0,
+        "magnitude_2d": 1.388003
+      },
+      "motion_class": "accelerating"
+    },
+    {
+      "index": 60,
+      "start_index": 60,
+      "end_index": 61,
+      "start_timestamp_us": 4823520676012,
+      "end_timestamp_us": 4823520776012,
+      "mid_timestamp_us": 4823520726012,
+      "relative_mid_time_s": 6.05,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.02033,
+        "y": -5.9e-05,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.02033,
+      "distance_3d_m": 0.02033,
+      "cumulative_distance_start_2d_m": 15.514318,
+      "cumulative_distance_end_2d_m": 15.534648,
+      "velocity_mps": {
+        "x": 0.2033,
+        "y": -0.00059,
+        "z": 0.0,
+        "speed_2d": 0.203301,
+        "speed_3d": 0.203301,
+        "speed_kph": 0.731883,
+        "speed_mph": 0.454771
+      },
+      "heading_rad": -0.002902,
+      "heading_deg": -0.166278,
+      "acceleration_from_previous_mps2": {
+        "x": 0.581,
+        "y": -0.0018,
+        "z": 0.0,
+        "magnitude_2d": 0.581003,
+        "longitudinal": 0.581,
+        "lateral": -0.000136
+      },
+      "heading_rate_from_previous_radps": -0.00078,
+      "curvature_from_previous_1pm": -0.004476,
+      "jerk_from_previous_mps3": {
+        "x": 1.48,
+        "y": -0.006,
+        "z": 0.0,
+        "magnitude_2d": 1.480012
+      },
+      "motion_class": "accelerating"
+    },
+    {
+      "index": 61,
+      "start_index": 61,
+      "end_index": 62,
+      "start_timestamp_us": 4823520776012,
+      "end_timestamp_us": 4823520876012,
+      "mid_timestamp_us": 4823520826012,
+      "relative_mid_time_s": 6.15,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.027922,
+        "y": -8.2e-05,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.027922,
+      "distance_3d_m": 0.027922,
+      "cumulative_distance_start_2d_m": 15.534648,
+      "cumulative_distance_end_2d_m": 15.562569,
+      "velocity_mps": {
+        "x": 0.27922,
+        "y": -0.00082,
+        "z": 0.0,
+        "speed_2d": 0.279221,
+        "speed_3d": 0.279221,
+        "speed_kph": 1.005196,
+        "speed_mph": 0.6246
+      },
+      "heading_rad": -0.002937,
+      "heading_deg": -0.168263,
+      "acceleration_from_previous_mps2": {
+        "x": 0.7592,
+        "y": -0.0023,
+        "z": 0.0,
+        "magnitude_2d": 0.759203,
+        "longitudinal": 0.7592,
+        "lateral": -8.4e-05
+      },
+      "heading_rate_from_previous_radps": -0.00035,
+      "curvature_from_previous_1pm": -0.001451,
+      "jerk_from_previous_mps3": {
+        "x": 1.782,
+        "y": -0.005,
+        "z": 0.0,
+        "magnitude_2d": 1.782007
+      },
+      "motion_class": "accelerating"
+    },
+    {
+      "index": 62,
+      "start_index": 62,
+      "end_index": 63,
+      "start_timestamp_us": 4823520876012,
+      "end_timestamp_us": 4823520976012,
+      "mid_timestamp_us": 4823520926012,
+      "relative_mid_time_s": 6.25,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.037707,
+        "y": -0.000114,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.037707,
+      "distance_3d_m": 0.037707,
+      "cumulative_distance_start_2d_m": 15.562569,
+      "cumulative_distance_end_2d_m": 15.600276,
+      "velocity_mps": {
+        "x": 0.37707,
+        "y": -0.00114,
+        "z": 0.0,
+        "speed_2d": 0.377072,
+        "speed_3d": 0.377072,
+        "speed_kph": 1.357458,
+        "speed_mph": 0.843485
+      },
+      "heading_rad": -0.003023,
+      "heading_deg": -0.173222,
+      "acceleration_from_previous_mps2": {
+        "x": 0.9785,
+        "y": -0.0032,
+        "z": 0.0,
+        "magnitude_2d": 0.978505,
+        "longitudinal": 0.97851,
+        "lateral": -0.000282
+      },
+      "heading_rate_from_previous_radps": -0.00086,
+      "curvature_from_previous_1pm": -0.002621,
+      "jerk_from_previous_mps3": {
+        "x": 2.193,
+        "y": -0.009,
+        "z": 0.0,
+        "magnitude_2d": 2.193018
+      },
+      "motion_class": "accelerating"
+    },
+    {
+      "index": 63,
+      "start_index": 63,
+      "end_index": 64,
+      "start_timestamp_us": 4823520976012,
+      "end_timestamp_us": 4823521076012,
+      "mid_timestamp_us": 4823521026012,
+      "relative_mid_time_s": 6.35,
+      "dt_s": 0.1,
+      "delta_m": {
+        "x": 0.049973,
+        "y": -0.000157,
+        "z": 0.0
+      },
+      "distance_2d_m": 0.049973,
+      "distance_3d_m": 0.049973,
+      "cumulative_distance_start_2d_m": 15.600276,
+      "cumulative_distance_end_2d_m": 15.650249,
+      "velocity_mps": {
+        "x": 0.49973,
+        "y": -0.00157,
+        "z": 0.0,
+        "speed_2d": 0.499732,
+        "speed_3d": 0.499732,
+        "speed_kph": 1.799037,
+        "speed_mph": 1.11787
+      },
+      "heading_rad": -0.003142,
+      "heading_deg": -0.180005,
+      "acceleration_from_previous_mps2": {
+        "x": 1.2266,
+        "y": -0.0043,
+        "z": 0.0,
+        "magnitude_2d": 1.226608,
+        "longitudinal": 1.2266,
+        "lateral": -0.000522
+      },
+      "heading_rate_from_previous_radps": -0.00119,
+      "curvature_from_previous_1pm": -0.002714,
+      "jerk_from_previous_mps3": {
+        "x": 2.481,
+        "y": -0.011,
+        "z": 0.0,
+        "magnitude_2d": 2.481024
+      },
+      "motion_class": "accelerating"
+    }
+  ]
+}
