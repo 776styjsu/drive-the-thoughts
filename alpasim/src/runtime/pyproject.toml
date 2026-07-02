@@ -1,0 +1,63 @@
+[build-system]
+requires = [ "setuptools>=61.0" ]
+build-backend = "setuptools.build_meta"
+
+# Trivial comment to trigger CI build-services (for test-slurm dependency).
+[project]
+name = "alpasim-runtime"
+version = "1.94.0"
+description = "Runtime of the Alpamayo Sim"
+requires-python = ">=3.11,<3.13"
+authors = [{name = "Michal Tyszkiewicz", email = "mtyszkiewicz@nvidia.com"}]
+dependencies = [
+    "aiofiles>=24.1.0",
+    "alpasim-eval",  # Local eval package
+    "alpasim-grpc",  # Local grpc package
+    "alpasim-utils[geometry]",  # Local utils package + Rust geometry types
+    "matplotlib>=3.8.0",  # Metrics plotting
+    "mergedeep>=1.3.4",
+    "numpy>=2.0.0",
+    "omegaconf>=2.3.0",
+    "polars>=1.0.0",  # Metrics data processing
+    "pyarrow>=15.0.0",  # Required for polars to_pandas() conversion
+    "prometheus-client>=0.21.0",
+    "psutil>=5.9",
+    "nvidia-ml-py>=11.5.0",  # GPU monitoring
+    "protobuf>=4.25.3",
+    "pyyaml>=6.0.2",
+    "rich>=13.0.0",
+    "scipy>=1.15.0",
+    "seaborn>=0.13.0",  # Metrics plotting
+    "csaps>=1.2.0",
+    "trajdata-alpasim==1.4.3",
+    "pandas<3",  # pandas 3.x breaks trajdata
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.20.0",
+    "mypy>=1.0.0",
+    "types-protobuf",
+    "types-aiofiles",
+    "grpcio>=1.70.0",
+    "pytest-grpc>=0.8.0",
+    "pyyaml>=6.0.2",
+    "openai>=1.0.0",  # online CoT-consistency monitor judge client (lazy-imported)
+]
+
+[tool.uv.sources]
+alpasim-eval = {workspace = true}
+alpasim-grpc = {workspace = true}
+alpasim-utils = {workspace = true}
+
+[tool.uv.sources.trajdata-alpasim]
+git = "https://github.com/NVlabs/trajdata"
+branch = "alpasim"
+
+[tool.setuptools.packages.find]
+include = [ "alpasim_runtime", "tests" ]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+markers = [
+    "manual: marks tests as manual execution only",
+]
+# To run manual tests, run: `pytest -m 'manual'`
+addopts = "-m 'not manual'"

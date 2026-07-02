@@ -1,0 +1,20 @@
+[project]
+name = "drive-the-thoughts-artifact"
+version = "0.1.0"
+description = "Lightweight reproduction environment for the Drive the Thoughts artifact"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+  "numpy",
+  "shapely",
+  "Pillow",
+  "matplotlib",
+  "pytest",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["src/utils", "src/tools"]
+testpaths = ["src/utils/tests", "src/tools/tests"]

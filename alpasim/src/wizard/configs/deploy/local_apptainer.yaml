@@ -1,0 +1,48 @@
+# @package _global_
+# Config for running on workstations/clusters using Apptainer instead of Docker.
+# Use cmd line arg "deploy=local_apptainer" with wizard.
+#
+# Prerequisites:
+#   1. Build an Apptainer image:  ./build_apptainer.sh   (no Docker required)
+#   2. Set wizard.sif_caches to the directory containing .sif files or sandbox directories
+#      OR let Apptainer pull via docker:// URI (requires network access)
+
+defaults:
+  # stable_manifest was removed from OSS; keep this optional so internal
+  # environments can still provide it without breaking OSS users.
+  - optional /stable_manifest: oss
+  - _self_
+
+defines:
+  # The repo-relative resolver makes the path relative to the git repo root.
+  filesystem: ${repo-relative:"data"}
+
+wizard:
+  run_method: "APPTAINER"
+  # Directory(s) to search for pre-built Apptainer images (.sif or sandbox dirs).
+  # Set to your local cache path, e.g.: ["/path/to/sif-cache"]
+  # Cache filenames must match image stems, e.g. alpasim-base:0.66.0 ->
+  # alpasim_base_0.66.0.sif (or .sandbox).
+  # If empty, Apptainer will pull images via docker:// URI.
+  sif_caches: []
+
+services:
+  driver:
+    replicas_per_container: 1
+    gpus: [0]
+
+  sensorsim:
+    replicas_per_container: 1
+    gpus: [0]
+
+  physics:
+    replicas_per_container: 1
+    gpus: [0]
+
+  trafficsim:
+    replicas_per_container: 1
+    gpus: [0]
+
+  controller:
+    replicas_per_container: 1
+    gpus: null

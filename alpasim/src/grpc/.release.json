@@ -1,0 +1,23 @@
+{
+  "$schema": "https://unpkg.com/release-it@18/schema/release-it.json",
+  "git": {
+    
+    "requireUpstream": true,
+    "requireCleanWorkingDir": false,
+    "commitMessage": "Release pipeline, Alpasim gRPC package, v${version}",
+    "tagName": "alpasim-grpc-v${version}",
+    "tagAnnotation": "[Automated release tag]"
+  },
+  "plugins": {
+    "@release-it/bumper": {
+      "in": {
+        "file": "pyproject.toml",
+        "path": "project.version"
+      },
+      "out": {
+        "file": "pyproject.toml",
+        "path": "project.version"
+      }
+    }
+  }
+}

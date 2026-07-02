@@ -1,0 +1,47 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "alpasim-tools"
+version = "0.1.0"
+description = "Collection of tools for Alpasim development and analysis"
+requires-python = ">=3.11"
+license = {text = "Proprietary"}
+
+# Base dependencies that most tools need
+dependencies = [
+    "numpy",
+    "Pillow",
+    "alpasim_runtime",
+    "matplotlib",
+    "alpasim_grpc",
+    "alpasim_utils[geometry]",
+    "alpasim_eval",
+    "opencv-python-headless",
+    "polars",
+    "tqdm",
+    "rich",
+    "omegaconf",
+    "protobuf",
+    "grpcio",
+    "scipy",
+    "openai",
+    "pytest",
+    "black",
+    "ruff",
+    "mypy",
+    "pyqt5",
+]
+
+# Local development sources
+[tool.uv.sources]
+alpasim_runtime = {workspace = true}
+alpasim_grpc = {workspace = true}
+alpasim_utils = {workspace = true}
+alpasim_eval = {workspace = true}
+
+[tool.hatch.build.targets.wheel]
+packages = [
+    "map_utils",
+]

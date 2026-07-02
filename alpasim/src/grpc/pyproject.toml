@@ -1,0 +1,31 @@
+[build-system]
+requires = [ "setuptools>=61.0,<82", "grpcio-tools", "protobuf>=4.0.0" ]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "alpasim_grpc"
+version = "0.53.0"
+description = "gRPC API definitions for Alpamayo Sim"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+  "grpcio",
+  "grpcio-tools",
+  "setuptools<82",  # pkg_resources removed in v82; grpcio-tools still imports it
+  "dataclasses-json>=0.6.7",
+  "protobuf>=4.0.0,<5.0.0",
+  "numpy",
+  "pytest",
+  "pytest-asyncio",
+]
+
+  [[project.authors]]
+  name = "Michal Tyszkiewicz"
+  email = "mtyszkiewicz@nvidia.com"
+
+  [project.scripts]
+  compile-protos = "scripts.compile_protos:compile_protos"
+  clean-protos = "scripts.compile_protos:clean_proto_files"
+
+[tool.setuptools.packages.find]
+where = [ "." ]
+include = [ "alpasim_grpc*", "scripts*" ]

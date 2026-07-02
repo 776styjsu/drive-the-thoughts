@@ -1,0 +1,74 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2025 NVIDIA Corporation
+
+syntax = "proto3";
+
+package physics;
+
+import "alpasim_grpc/v0/common.proto";
+
+service PhysicsService {
+    rpc ground_intersection (PhysicsGroundIntersectionRequest) returns (PhysicsGroundIntersectionReturn);
+    rpc get_version (common.Empty) returns (common.VersionId);
+    rpc get_available_scenes (common.Empty) returns (common.AvailableScenesReturn);
+    rpc shut_down (common.Empty) returns (common.Empty);
+}
+
+message PhysicsGroundIntersectionRequest {
+    message PosePair {
+        // `now_pose` and `future_pose` are active transforms local->aabb for the
+        // bounding-box center at the current and future timestamps. The physics
+        // system adjusts `future_pose`; the runtime assumes `now_pose` is already
+        // valid (typically copied from the previous call). See CONTRIBUTING.md,
+        // "Coordinate Systems".
+        common.Pose now_pose = 1;
+        common.Pose future_pose = 2;
+    }
+
+    message EgoData {
+        common.AABB aabb = 1; // TODO: replace with mesh ID?
+        // Timestamped ego poses (active transforms local->aabb) to ground-correct.
+        // All poses are processed independently with the same algorithm.
+        common.Trajectory ego_trajectory_aabb = 3;
+    }
+
+    message OtherObject {
+        // mostly vehicles but likely we don't want pedestrians to clip into the ground either
+        common.AABB aabb = 1;
+        PosePair pose_pair = 2;
+    }
+
+    // to identify the ground mesh
+    string scene_id = 1;
+
+    // start and end of all PosePairs in the message
+    fixed64 now_us = 2;
+    fixed64 future_us = 3;
+
+    optional EgoData ego_data = 4;
+    repeated OtherObject other_objects = 5;
+}
+
+message PhysicsGroundIntersectionReturn {
+    enum Status {
+        SUCCESSFUL_UPDATE = 0;
+        UNKNOWN = 1;
+        INSUFFICIENT_POINTS_FITPLANE = 2;
+        HIGH_TRANSLATION = 3;
+        HIGH_ROTATION = 4;
+
+    }
+
+    message ReturnPose {
+        // Pose represents the active transform local->aabb for the center of
+        // the AABB (see CONTRIBUTING.md, "Coordinate Systems").
+        common.Pose pose = 1;
+        Status status = 2;
+    }
+
+    // Ground-corrected ego poses, same order as request ego_trajectory_aabb.
+    common.Trajectory ego_trajectory_aabb = 4;
+    // Per-pose status for ego_trajectory_aabb, same order.
+    repeated Status ego_status = 5;
+    repeated ReturnPose other_poses = 2; // return in same order as in request
+}

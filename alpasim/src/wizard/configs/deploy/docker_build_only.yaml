@@ -1,0 +1,17 @@
+# @package _global_
+# Special deploy target: only generates docker-compose config, does not run.
+
+defaults:
+  - _self_
+
+defines:
+  filesystem: ${repo-relative:"data"}
+
+wizard:
+  run_method: "NONE"
+  dry_run: true
+  validate_mount_points: false
+  log_dir: "./generated_configs"
+
+scenes:
+  scene_ids: []

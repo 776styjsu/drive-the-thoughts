@@ -1,0 +1,71 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2025 NVIDIA Corporation
+
+syntax = "proto3";
+
+package traffic;
+
+import "alpasim_grpc/v0/common.proto";
+
+service TrafficService {
+    rpc start_session (TrafficSessionRequest) returns (common.SessionRequestStatus);
+    rpc close_session (TrafficSessionCloseRequest) returns (common.Empty);
+    rpc simulate (TrafficRequest) returns (TrafficReturn);
+    rpc get_metadata (common.Empty) returns (TrafficModuleMetadata);
+    rpc shut_down (common.Empty) returns (common.Empty);
+}
+
+message ObjectTrajectory {
+    common.AABB aabb = 1;
+    // For all objects (including ego), points describe the active transform
+    // local->aabb for the bounding-box center (see CONTRIBUTING.md, "Coordinate
+    // Systems").
+    common.Trajectory trajectory = 2;
+    string object_id = 3;
+    bool is_static = 4;
+}
+
+message ObjectTrajectoryUpdate {
+    string object_id = 1;
+    // Trajectory of the bounding-box center as active transforms
+    // local->aabb (see CONTRIBUTING.md, "Coordinate Systems").
+    common.Trajectory trajectory = 2; 
+}
+
+message TrafficSessionRequest {
+    string session_uuid = 1;
+    string map_id = 2;
+    fixed64 random_seed = 3;
+    repeated ObjectTrajectory logged_object_trajectories = 4;
+    // Earliest time in microseconds when the traffic model takes over control.
+    // For objects appearing later in the scene, they will be handed over after
+    // `traffic_models.minimum_hisotry_length` steps of log-history, but not
+    // before `handover_time_us`.
+    optional fixed64 handover_time_us = 5;
+}
+
+message TrafficSessionCloseRequest {
+    string session_uuid = 1;
+}
+
+message TrafficRequest {
+    string session_uuid = 1;
+    fixed64 time_query_us = 2; // time for which the next predictions are requested
+
+    // Updates to trajectories not controlled by the traffic model, primarily 
+    // the ego-agent. Needs to include poses until at least `time_query_us`.
+    repeated ObjectTrajectoryUpdate object_trajectory_updates = 3;
+}
+
+message TrafficReturn {
+    // Returns the updated trajectories for all objects in the scene. 
+    // The last pose in the trajectory is the predicted pose at `time_query_us`.
+    // Convention: Maintains the order of objects in `TrafficSessionRequest`.
+    repeated ObjectTrajectoryUpdate object_trajectory_updates = 1;
+}
+
+message TrafficModuleMetadata {
+    common.VersionId version_id = 1;
+    fixed64 minimum_history_length_us = 2;
+    repeated string supported_map_ids = 3;
+}

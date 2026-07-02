@@ -1,0 +1,69 @@
+# Should be used in defaults list, e.g.
+# - /driver: vavam
+# Type validation happens at driver runtime via OmegaConf.structured merge
+
+defaults:
+  - vavam_configs       # Camera and simulation configs for 1-cam 2Hz
+  - _self_                      # YAML values override schema defaults
+
+# VAM Driver Configuration for Alpasim
+
+# Logging level (uses wizard's global setting)
+log_level: ${wizard.log_level}
+
+# Model configuration
+model:
+  model_type: vam  # Entry-point name in alpasim.models registry
+  checkpoint_path: "/mnt/drivers/vavam/VAM_width_1024_pretrained_139k.pt"
+  device: "cuda"
+  tokenizer_path: "/mnt/drivers/vavam/VQ_ds16_16384_llamagen_encoder.jit"
+
+# Server configuration
+host: "0.0.0.0"
+port: ???
+
+# Inference configuration
+inference:
+  use_cameras: ["camera_front_wide_120fov"]  # VAM requires exactly one camera
+  max_batch_size: 32
+  subsample_factor: 1
+  context_length: 1
+
+rectification:
+  # Rectify camera_front_wide_120fov renders back to the NuScenes pinhole model.
+  camera_front_wide_120fov:
+    focal_length: [1545.0, 1545.0]
+    # Note: principal_point uses [x, y] order (width, height coords),
+    # while resolution_hw uses [height, width] order (as the _hw suffix
+    # indicates). So the relative order is flipped!
+    # We're setting the pp to 560 to mimic nuPlans rendering at 1120 and
+    # cropping the bottom 40px.
+    principal_point: [960.0, 560.0]
+    resolution_hw: [1080, 1920]
+    radial: [-0.356123, 0.172545, -0.05231, 0.0, 0.0, 0.0]
+    tangential: [-0.00213, 0.000464]
+    thin_prism: [0.0, 0.0, 0.0, 0.0]
+
+    # We first apply rectification from f-theta to pinhole, then optionally apply
+    # pinhole distortion correction to the pinhole frame.
+    # To make sure the rectified image is large enough to cover the pinhole
+    # camera's (after distortion correction) field of view, we overscan the
+    # rectified image.
+    max_overscan_scale: 2.0
+    safety_margin_px: 10
+
+# Route configuration
+route:
+  default_command: 2  # Default command: 0=right, 1=left, 2=straight
+  use_waypoint_commands: true
+  command_distance_threshold: 3.0  # Lateral displacement threshold in meters
+  min_lookahead_distance: 20.0  # Minimum distance to look ahead for waypoints in meters
+
+# Output configuration
+output_dir: "/mnt/output/driver"
+
+# Trajectory optimization (VaVam-Eco, disabled by default)
+trajectory_optimizer:
+  enabled: false
+
+plot_debug_images: false

@@ -1,0 +1,52 @@
+# Should be used in defaults list, e.g.
+# - /driver: alpamayo1
+# Type validation happens at driver runtime via OmegaConf.structured merge
+
+defaults:
+  - alpamayo_configs    # Camera and simulation configs for 4-cam 10Hz
+  - _self_                      # YAML values override schema defaults
+
+# Alpamayo 1 Driver Configuration for Alpasim
+
+# Logging level (uses wizard's global setting)
+log_level: ${wizard.log_level}
+
+# Model configuration
+model:
+  model_type: alpamayo1  # Entry-point name in alpasim.models registry
+  # HuggingFace model ID (requires cached download or hf authentication in the driver container)
+  checkpoint_path: "nvidia/Alpamayo-R1-10B"
+  # # Alternative local path to a pre-downloaded model
+  # checkpoint_path: "/mnt/drivers/alpamayo1/Alpamayo-R1-10B"
+  device: "cuda"
+
+# Server configuration
+host: "0.0.0.0"
+port: ???
+
+# Inference configuration
+inference:
+  use_cameras:
+     - camera_cross_left_120fov
+     - camera_front_wide_120fov
+     - camera_cross_right_120fov
+     - camera_front_tele_30fov
+  max_batch_size: 1  # Alpamayo 1 is memory intensive, start with batch size 1
+  subsample_factor: 1
+  context_length: 4  # Alpamayo 1 uses 4 temporal frames per camera
+
+# Route configuration
+route:
+  default_command: 2  # Default command: 0=right, 1=left, 2=straight
+  use_waypoint_commands: true
+  command_distance_threshold: 3.0  # Lateral displacement threshold in meters
+  min_lookahead_distance: 20.0  # Minimum distance to look ahead for waypoints in meters
+
+# Output configuration
+output_dir: "/mnt/output/driver"
+
+# Trajectory optimization (disabled by default for Alpamayo 1)
+trajectory_optimizer:
+  enabled: false
+
+plot_debug_images: false

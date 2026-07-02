@@ -1,0 +1,79 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025 NVIDIA Corporation
+
+import json
+import logging
+import os
+from pathlib import Path
+
+from filelock import FileLock
+
+logger = logging.getLogger("alpasim_eval.post_eval_aggregation")
+
+
+def incr_counter_and_check_aggregation_start(log_dir: str) -> bool:
+    """
+    Increments counter and checks if post_eval_aggregation should be started in
+    this job.
+
+    Returns True if we're the last job in the array or if there is no array job.
+    """
+    lock = FileLock(Path(log_dir) / "post_eval_aggregation.lock")
+    task_count = int(os.environ.get("SLURM_ARRAY_TASK_COUNT", 0))
+    task_id = int(os.environ.get("SLURM_ARRAY_TASK_ID", 0))
+    if task_count == 0:
+        logger.info("No array job, don't need to check counter.")
+        return True
+    with lock:
+        # Set `prev_finished_jobs` by loading it from the file if it exists.
+        # Otherwise set it to 0.
+        if not (Path(log_dir) / "post_eval_aggregation.json").is_file():
+            logger.info("No post_eval_aggregation.json file, starting one.")
+            prev_finished_jobs = 0
+            prev_finished_job_ids = []
+        else:
+            with open(Path(log_dir) / "post_eval_aggregation.json", "r") as f:
+                data = json.load(f)
+                prev_finished_jobs = data["finished_jobs"]
+                prev_finished_job_ids = data["finished_job_ids"]
+                logger.info(
+                    "Loaded post_eval_aggregation.json file, prev_finished_jobs: %d, prev_finished_job_ids: %s",
+                    prev_finished_jobs,
+                    prev_finished_job_ids,
+                )
+
+        # Increment the counter in the file (create it if it doesn't exist).
+        with open(Path(log_dir) / "post_eval_aggregation.json", "w") as f:
+            json.dump(
+                {
+                    "finished_jobs": prev_finished_jobs + 1,
+                    "finished_job_ids": prev_finished_job_ids + [task_id],
+                },
+                f,
+            )
+        logger.info(
+            "Wrote post_eval_aggregation.json file, prev_finished_jobs + 1: %d, prev_finished_job_ids: %s",
+            prev_finished_jobs + 1,
+            prev_finished_job_ids,
+        )
+        # Check if we're the last job and should start post_eval_aggregation
+        if prev_finished_jobs < task_count - 1:
+            logger.info(
+                "Not the last job, skipping post_eval_aggregation. "
+                "prev_finished_jobs: %d, task_count: %d, prev_finished_job_ids: %s",
+                prev_finished_jobs,
+                task_count,
+                prev_finished_job_ids,
+            )
+            return False
+        elif prev_finished_jobs == task_count - 1:
+            # We're the last job
+            logger.info("Last job, starting post_eval_aggregation")
+            return True
+        elif prev_finished_jobs > task_count - 1:
+            logger.warning(
+                "More jobs finished than expected, probably running manually?"
+                " If not, this might be a bug?"
+            )
+            return True
+    return False

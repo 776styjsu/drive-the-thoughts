@@ -1,0 +1,35 @@
+# @package _global_
+
+runtime:
+  simulation_config:
+    force_gt_duration_us: 3_000_000
+    n_sim_steps: 100
+    n_rollouts: 1
+    control_timestep_us: 500_000
+    time_start_offset_us: 500_000 # Needs to be in sync
+    ego_mask_rig_config_id: null
+
+    cameras:
+      - height: 1080
+        width: 1920
+        logical_id: camera_front_wide_120fov
+        frame_interval_us: 500_000 # also needs to be in sync
+        shutter_duration_us: 30_000
+        first_frame_offset_us: -30_000
+
+  extra_cameras:
+    # # Original nuscenes pinhole reference for comparison:
+    - logical_id: camera_front_wide_120fov
+      rig_to_camera:
+        translation_m: [1.65897811, -0.01443456, 1.51539499]
+        rotation_xyzw: [-0.49929397355810856, 0.5039939168301356, -0.4972939976976715, 0.49939397235113037]
+    #   intrinsics:
+    #     model: opencv_pinhole
+    #     opencv_pinhole:
+    #       focal_length: [1545.0, 1545.0]
+    #       principal_point: [960.0, 560.0]
+    #       radial: [-0.356123, 0.172545, -0.05231, 0.0, 0.0, 0.0]
+    #       tangential: [-0.00213, 0.000464]
+    #       thin_prism: [0.0, 0.0, 0.0, 0.0]
+    #   resolution_hw: [1080, 1920]
+    #   shutter_type: ROLLING_TOP_TO_BOTTOM

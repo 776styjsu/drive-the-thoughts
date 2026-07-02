@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "alpasim_utils"
+version = "0.52.0"
+description = "Utility functions for Alpamayo Sim"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+  "alpasim_grpc",
+  "dataclasses-json>=0.6.7",
+  "typing-inspect>=0.9.0",  # Required for dataclasses-json with mypy-extensions>=1.0
+  "numpy",
+  "scipy",
+  "aiofiles",
+  "csaps",
+  "imageio[ffmpeg]",
+  "pandas",
+  "pytest",
+  "pytest-asyncio",
+  "trajdata-alpasim==1.4.3",
+]
+
+[project.optional-dependencies]
+geometry = [
+  "utils_rs",
+]
+
+[project.scripts]
+asl-to-frames = "alpasim_utils.asl_to_frames.__main__:main"
+print-asl = "alpasim_utils.print_asl.__main__:main"
+trajectory-additional-info = "alpasim_utils.trajectory_additional_info:main"
+
+[[project.authors]]
+name = "Michal Tyszkiewicz"
+email = "mtyszkiewicz@nvidia.com"
+
+[tool.uv.sources]
+alpasim_grpc = {workspace = true}
+utils_rs = {workspace = true}
+
+[tool.uv.sources.trajdata-alpasim]
+git = "https://github.com/NVlabs/trajdata"
+branch = "alpasim"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["alpasim_utils*"]

@@ -1,0 +1,371 @@
+# \/ defines order of inheritance of configs in hydra. `config_schema` is defined in python code (not .yaml)
+# and serves as the base skeleton. `_self_` means this file is applied on top of that schema.
+defaults:
+  - config_schema
+  - _self_
+  - deploy: null # Must be overridden (e.g., deploy=local)
+  - driver: null # Must be overridden (e.g., driver=vavam, driver=alpamayo1)
+  - topology: null # Must be overridden (e.g., topology=1gpu)
+  - trafficsim: null # Optional override
+  - controller: null # Optional override
+  - sensorsim: null # Optional override
+  - optional scenes_catalog: internal # auto-override when internal plugin installed
+  - optional image_defaults: internal # auto-override when internal plugin installed
+
+# \/ hydra-specific configuration of legacy behavior (off)
+hydra:
+  job:
+    chdir: false
+
+# This dictionary serves only to be references in other parts of the config file
+defines:
+  filesystem: ???
+  driver_model: ???
+  mpc_implementation: linear # "linear" (OSQP, faster) or "nonlinear" (CasADi)
+  image_registry: ""
+  base_image: "${defines.image_registry}alpasim-base:${repo-version:}"
+  hf_cache: "${oc.env:HF_HOME,${oc.env:HOME}/.cache/huggingface}"
+
+  # defaults will work out of the box \/
+  drivers: "${defines.filesystem}/drivers"
+  sensordata: "${defines.filesystem}/nre-artifacts"
+  trafficsim_map_cache: "${defines.filesystem}/trafficsim/unified_data_cache"
+
+  sensorsim_entrypoint: "/app/internal/scripts/pycena/runtime/pycena_run"
+  helper: scripts
+  vscode: sources/remote-vscode-server
+  physics_cache_size: 16 # should match or exceed concurrent scenes to avoid cache thrashing
+
+# \/ the wizard.* section defines properties global to all alpasim modules
+wizard:
+  # Name of the run, used to identify the run in the databases. If null, will
+  # use the SLURM job name if set.
+  run_name: null
+  # change to `SLURM` for ORD deployments, `DOCKER_COMPOSE` for local runs via
+  # docker-compose and `DOCKER` for local runs via "raw" docker or `NONE` for
+  # only generating the configs.
+  run_method: "DOCKER_COMPOSE"
+
+  # directory path to log the results of this run. ??? indicates it is mandatory to override this via cmdline args
+  log_dir: ???
+
+  # with wizard.dry_run=true we wouldn't start any containers and just print out the commands that would be executed.
+  # note this performs various checks interanlly and thus may still not work if you're not on an ORD node
+  dry_run: false
+
+  # assert that all defined volume mounts exist at the start of the simulation
+  validate_mount_points: true
+
+  # the directory which will be searched for `.sqsh` files with images needed for simulation when running on ORD with
+  # `wizard.run_method=SLURM`. The default location should contain all files required for running alpasim versions from
+  # the repo but you may need to add your own cache if you're playing with custom-built images.
+  sqshcaches:
+    - "${defines.filesystem}/sqsh"
+    - "${defines.filesystem}/sqsh/dev"
+
+  # the different containers will use ports {baseport}, {baseport+1}, ...
+  # usually not needed to modify
+  baseport: 6000
+
+  # Does not need to be touched. For slurm runs (wizard.run_method=SLURM) this will be replaced with the slurm job ID
+  slurm_job_id: null
+
+  # Services to run for simulation (e.g., ["driver", "sensorsim", "physics", "trafficsim", "controller", "runtime"])
+  run_sim_services:
+    ["driver", "sensorsim", "physics", "trafficsim", "controller", "runtime"]
+
+  # TODO: undocumented options
+  run_mode: "BATCH"
+  timeout: 600
+  latest_symlink: false
+
+  # If set, the wizard will pull the driver code from the specified hash into
+  # `${wizard.log_dir}/driver_code`. Can be useful for mounting into the
+  # driver container for debugging.
+  driver_code_hash: null
+
+  # Used if `driver_code_hash` is set. Requires configured ssh keys for
+  # pulling from gitlab, but can also point towards a local repo!
+  driver_code_repo: null
+
+  submitter: "unspecified" # An optional specifier of the submitter (used for tracking purposes)
+  description: "unspecified" # An optional description of the run (used for tracking purposes)
+
+  # Global log level for all alpasim services (DEBUG, INFO, WARNING, ERROR)
+  log_level: INFO
+
+scenes:
+  # Selection method (set one of these two)
+  scene_ids:
+    - clipgt-01d503d4-449b-46fc-8d78-9085e70d3554 # default OSS scene from huggingface (26.02 dataset)
+  test_suite_id: null # Test suite ID to use (from suites_csv)
+
+  # Limit the number of scenes to run (0 or negative means no limit)
+  limit_to_first_n: 0
+
+  # Paths
+  scene_cache: "${defines.filesystem}/nre-artifacts"
+  scenes_csv:
+    - "${repo-relative:'data/scenes/sim_scenes.csv'}"
+  suites_csv:
+    - "${repo-relative:'data/scenes/sim_suites.csv'}"
+
+# \/ services.* defines the individual components of the simulation. Each of them is deployed from an image so the layout of
+# each item is similar. For the services that pull in local code (e.g., controller, runtime, eval) we mount the repo-relative
+# `src/` directory into `/mnt/src` in the container and run from there. The virtual environment is reused from the container.
+services:
+  # \/ sensor simulator for now is just NRE. We'll use it as an example on the structure of a container definition
+  sensorsim:
+    image: nvcr.io/nvidia/nre/nre-ga:26.02
+    external_image: true
+    # \/ volumes lets us mount host (ORD/local) containers to the running container
+    volumes:
+      - "${scenes.scene_cache}:/mnt/nre-data"
+      - "${defines.sensordata}/ego-hoods:/mnt/ego-hoods"
+      - "${wizard.log_dir}/nre_cache:/tmp/nre-cache-dir"
+    # \/ environments lets you set environment variables inside the container
+    environments:
+      # this may not be necessary but at least on COLOSSUS by default pytorch had really stupid
+      # configuration running to excessively parallelizing everything
+      - OMP_NUM_THREADS=1
+    # \/ command is like docker entrypoint + command combined
+    command:
+      - "${defines.sensorsim_entrypoint}"
+      - "serve-grpc"
+      - "--port={port}" # {port} is a wizard-generated unique variable which enumerates {baseport}, {baseport+1}, ...
+      - "--host=0.0.0.0" # the default container IP
+      - "--artifact-glob=/mnt/nre-data/{sceneset}/**/*.usdz"
+      - "--egocar-hood-dir=/mnt/ego-hoods"
+      - "--no-enable-nrend"
+      - "--download-cache-dir /tmp/nre-cache-dir" # unused
+      - "--cache-size=${defines.nre_cache_size}" # as a rule of thumb n_concurrent_rollouts + 1 allows to avoid premature evictions
+      - "--max-workers=4"
+      - "--enable-editing-actors"
+      # - "--enable-timing" # uncomment to enable timing information on the sensor simulator side
+
+  # \/ services.drive is the driving policy (Alpamayo/HydraMDP, etc)
+  driver:
+    image: ${defines.base_image}
+    volumes:
+      - "${defines.drivers}:/mnt/drivers"
+      - "${wizard.log_dir}:/mnt/output" # optional output like the debug images
+      - "${repo-relative:'src'}:/repo/src"
+      - "${repo-relative:'plugins'}:/repo/plugins"
+      - "${defines.hf_cache}:/root/.cache/huggingface"
+    command:
+      - "uv run -m alpasim_driver.main"
+      - "--config-path=/mnt/output"
+      - "--config-name=driver-config.yaml"
+      - "host=0.0.0.0"
+      - "port={port}"
+      - "hydra.run.dir=/mnt/output/driver_logs_{port}"
+
+  physics:
+    image: ${defines.base_image}
+    volumes:
+      - "${scenes.scene_cache}:/mnt/nre-data"
+      - "${repo-relative:'src'}:/repo/src"
+      - "${repo-relative:'plugins'}:/repo/plugins"
+      - "${wizard.log_dir}/warp_cache:/mnt/warp"
+    environments:
+      - WARP_CACHE_PATH='/mnt/warp'
+    command:
+      - "uv run physics_server"
+      - "--host=0.0.0.0" # again, default container IP
+      - "--port={port}" # arbitrary, needs to be updated in runtime-config.yaml
+      - "--artifact-glob=/mnt/nre-data/{sceneset}/**/*.usdz"
+      - "--use-ground-mesh=true"
+      - "--cache-size=${defines.physics_cache_size}" # should match or exceed concurrent scenes to avoid cache thrashing
+      - "--log-level=${wizard.log_level}"
+
+  trafficsim:
+    image: ${defines.base_image}
+    command:
+      - "echo 'not yet included'"
+
+  controller:
+    image: ${defines.base_image}
+    volumes:
+      - "${wizard.log_dir}/controller:/mnt/output"
+      - "${repo-relative:'src'}:/repo/src"
+      - "${repo-relative:'plugins'}:/repo/plugins"
+    command:
+      - "uv run python -m alpasim_controller.server"
+      - "--port={port}"
+      - "--log_dir=/mnt/output"
+      - "--log-level=${wizard.log_level}"
+      - "--mpc-implementation=${defines.mpc_implementation}"
+
+  # \/ the orchestrating container - only 1 needed irrespectively of however many other there are
+  runtime:
+    image: ${defines.base_image}
+    # \/ only starts if all the dependencies started correctly
+    depends_on:
+      - driver
+      - sensorsim
+      - physics
+      - trafficsim
+      - controller
+    volumes:
+      - "${scenes.scene_cache}:/mnt/nre-data"
+      - "${wizard.log_dir}:/mnt/log_dir"
+      - "${or:${wizard.array_job_dir},${wizard.log_dir}}:/mnt/array_job_dir"
+      - "${repo-relative:'src'}:/repo/src"
+      - "${repo-relative:'plugins'}:/repo/plugins"
+    gpus: null # uses no GPUs
+    command:
+      - "uv run python -m alpasim_runtime.simulate"
+      - "--usdz-glob=/mnt/nre-data/{sceneset}/**/*.usdz"
+      - "--user-config=/mnt/log_dir/{runtime_config_name}"
+      - "--network-config=/mnt/log_dir/generated-network-config.yaml"
+      - "--log-dir=/mnt/log_dir"
+      - "--log-level=${wizard.log_level}"
+      - "--array-job-dir=/mnt/array_job_dir"
+      - "--eval-config=/mnt/log_dir/eval-config.yaml"
+    replicas_per_container: 1 # should only be one runtime orchestrator
+
+runtime:
+  # nr_workers and endpoints.*.n_concurrent_rollouts are set by topology configs.
+
+  endpoints:
+    # shut down the system after simulation is finished. without this flag the microservice servers
+    # will remain on forever requring a manual interrupt (useful for debugging)
+    do_shutdown: true
+    # Cache size used by the scene cache monitor to ensure enough capacity
+    sensorsim_cache_size: ${defines.nre_cache_size}
+
+  enable_autoresume: false
+  # How many scenes (in particular maps) to cache in the worker local artifact cache.
+  artifact_cache_size: 10
+
+  simulation_config:
+    n_sim_steps: 200 # how many steps to simulate in a rollout
+    n_rollouts: 1 # how many rollouts to simulate for that scenario
+    force_gt_duration_us: 1_700_000 # 1.7s
+    send_recording_ground_truth: false # Disable sending ground truth data to the driver
+
+    control_timestep_us: 100_000
+    pose_reporting_interval_us: 0 # 0 = controller reports only the final pose
+
+    time_start_offset_us: 300_000
+
+    ego_mask_rig_config_id: "hyperion_8_1" # which rig/directory in ego-hoods to use for ego masking
+    planner_delay_us: 0
+
+    # Actors present shorter than this (in micro-seconds) are ignored. Set to 0 to disable.
+    min_traffic_duration_us: 3_000_000
+
+    assert_zero_decision_delay: true
+
+    physics_update_mode: "EGO_ONLY"
+
+    route_generator_type: "MAP" # "MAP" or "RECORDED"
+
+    # Online CoT/trajectory consistency monitor. Disabled unless explicitly
+    # enabled with runtime.simulation_config.consistency_monitor.enabled=true.
+    consistency_monitor:
+      enabled: false
+      provider: "qwen3_4b_fp8"
+      model: null
+      base_url: null
+      prompt: "center_of_lane_v5"
+      lane_reference: "map_graph"
+      trajectory_frame: "dual"
+      max_samples: 3
+      accept_threshold: 3.0
+      monitor_every_n_steps: 1
+      seed: 42
+
+    vehicle: null # use values from the .usdz file (original dimensions)
+
+    # Note: If you change the `frame_interval_us`, it will affect the frequency of
+    # camera images sent to the driver, which, depending on the driver, could effect
+    # closed loop behavior. If you want to keep the behavior unchanged, consider
+    # asjusting the `driver.inference.Cframes_subsample` parameter,
+    # which controls how many frames are skipped between consecutive images sent to the driver.
+    cameras:
+      - height: 320
+        width: 512
+        logical_id: camera_front_wide_120fov
+
+        # If you change this see note above about `driver.inference.Cframes_subsample`
+        frame_interval_us: 100_000
+        shutter_duration_us: 30_000
+        first_frame_offset_us: -30_000
+      - height: 320
+        width: 512
+        logical_id: camera_front_tele_30fov
+
+        # If you change this see note above about `driver.inference.Cframes_subsample`
+        frame_interval_us: 100_000
+        shutter_duration_us: 30_000
+        first_frame_offset_us: -30_000
+
+eval:
+  # Set to false to disable in-runtime evaluation (e.g., for debugging or performance testing)
+  enabled: true
+  vec_map:
+    incl_road_edges: true
+    incl_traffic_signs: true
+    incl_wait_lines: true
+    max_num_lanes: 20
+    num_pts_per_lane: 20
+
+  num_processes: 16
+  vehicle:
+    vehicle_corner_roundness: 0.5
+    vehicle_shrink_factor: 0.02
+
+  scorers:
+    min_ade:
+      time_deltas: [0.5, 1.0, 2.5, 5.0]
+      incl_z: False
+      target: GT
+    plan_deviation:
+      incl_z: False
+      avg_decay_rate: 0.1
+      min_timesteps: 5
+    image:
+      camera_logical_id: camera_front_wide_120fov
+
+  aggregation_modifiers:
+    max_dist_to_gt_trajectory: 4.0
+
+  video:
+    render_video: True
+    video_layouts: ["DEFAULT"] # ["DEFAULT", "REASONING_OVERLAY"]
+    camera_id_to_render: camera_front_wide_120fov
+    reasoning_text_refresh_interval_s: 1.0 # for reasoning overlay layout only
+    overlay_plans_on_camera: True
+    render_every_nth_frame: 1
+    generate_combined_video: False
+    combined_video_speed_factor: 0.33
+    metrics_table_entries:
+      - offroad_or_collision_at_fault
+      - collision_any
+      - collision_at_fault
+      - collision_front
+      - collision_lateral
+      - collision_rear
+      - offroad
+      - dist_to_gt_trajectory
+      - dist_to_gt_location
+      - progress
+      - progress_rel
+      - safety_monitor_triggered
+    map_video:
+      map_radius_m: 20
+      ego_loc: BOTTOM_CENTER
+      rotate_map_to_ego: True
+      map_elements_to_plot:
+        - ROAD_LANE_CENTER
+        - ROAD_LANE_LEFT_EDGE
+        - ROAD_LANE_RIGHT_EDGE
+        - ROAD_EDGE
+        - STOP_LINE
+        - GT_LINESTRING
+        - EGO_GT_GHOST_POLYGON
+        - DRIVER_RESPONSES
+        - ROUTE
+        - AGENTS
+# driver config is loaded from the driver group (e.g., driver=vavam)

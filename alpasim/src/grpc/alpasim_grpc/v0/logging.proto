@@ -1,0 +1,111 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2025 NVIDIA Corporation
+
+syntax = "proto3";
+
+package logging;
+
+import "alpasim_grpc/v0/common.proto";
+import "alpasim_grpc/v0/sensorsim.proto";
+import "alpasim_grpc/v0/egodriver.proto";
+import "alpasim_grpc/v0/physics.proto";
+import "alpasim_grpc/v0/traffic.proto";
+import "alpasim_grpc/v0/controller.proto";
+
+message RolloutMetadata {
+    message VersionIds {
+        common.VersionId runtime_version = 1;
+        common.VersionId egodriver_version = 2;
+        common.VersionId sensorsim_version = 3;
+        common.VersionId physics_version = 4;
+        common.VersionId traffic_version = 5;
+        common.VersionId controller_version = 6;
+    }
+
+    message SessionMetadata {
+        string session_uuid = 1;
+        string scene_id = 2;
+        uint32 batch_size = 3 [deprecated = true]; // always 1
+        uint32 n_sim_steps = 4;
+        fixed64 start_timestamp_us = 5;
+        fixed64 control_timestep_us = 6;
+        string nre_runid = 7;
+        string nre_version= 8;
+        string nre_uuid = 9;
+    }
+
+    message ActorDefinitions {
+        message ActorAABB {
+            string actor_id = 1; // "EGO" for egovehicle, uuid for all others 
+            common.AABB aabb = 2;
+            string actor_label = 3;
+        }
+        repeated ActorAABB actor_aabb = 1; // including ego
+    }
+
+    SessionMetadata session_metadata = 1;
+    ActorDefinitions actor_definitions = 2;
+    fixed64 force_gt_duration = 3;
+    VersionIds version_ids = 4;
+    int32 rollout_index = 5 [deprecated = true]; // always 0
+    common.Pose transform_ego_coords_rig_to_aabb = 6; // Active transform rig->aabb for the ego (see CONTRIBUTING.md, "Coordinate Systems").
+    // Recorded ego trajectory expressed in the rig frame.
+    common.Trajectory ego_rig_recorded_ground_truth_trajectory = 7;
+}
+
+message ActorPoses {
+    message ActorPose {
+        string actor_id = 1; // "EGO" for egovehicle, uuid for all others
+        // Active transform local->aabb for the actor (see CONTRIBUTING.md, "Coordinate Systems").
+        common.Pose actor_pose = 2;
+    }
+    fixed64 timestamp_us = 1;
+    repeated ActorPose actor_poses = 2; // including ego at position 0
+}
+
+message LogEntry {
+    oneof log_entry {
+        // always at the start of a rollout
+        RolloutMetadata rollout_metadata = 1;
+
+        // once per simulator decision step
+        ActorPoses actor_poses = 2;
+
+        ///////
+        // microservice requests and responses
+        ///////
+
+        nre.grpc.protos.sensorsim.RGBRenderRequest render_request = 3;
+        // we save responses separately, as individual files
+
+        egodriver.DriveRequest driver_request = 4;
+        egodriver.DriveResponse driver_return = 5;
+
+        traffic.TrafficRequest traffic_request = 6;
+        traffic.TrafficReturn traffic_return = 7;
+
+        physics.PhysicsGroundIntersectionRequest physics_request = 8;
+        physics.PhysicsGroundIntersectionReturn physics_return = 9;
+
+        egodriver.DriveSessionRequest driver_session_request = 10;
+        egodriver.RolloutCameraImage driver_camera_image = 11;
+        egodriver.RolloutEgoTrajectory driver_ego_trajectory = 12;
+
+        traffic.TrafficSessionRequest traffic_session_request = 13;
+
+        controller.RunControllerAndVehicleModelRequest controller_request = 14;
+        controller.RunControllerAndVehicleModelResponse controller_return = 15;
+
+        common.PoseAtTime egomotion_estimate_error = 16;
+        egodriver.RouteRequest route_request = 17;
+        egodriver.GroundTruthRequest ground_truth_request = 18;
+
+        nre.grpc.protos.sensorsim.AvailableCamerasRequest available_cameras_request = 19;
+        nre.grpc.protos.sensorsim.AvailableCamerasReturn available_cameras_return = 20;
+
+        nre.grpc.protos.sensorsim.AggregatedRenderRequest aggregated_render_request = 21;
+
+        common.Empty available_ego_masks_request = 22;
+        nre.grpc.protos.sensorsim.AvailableEgoMasksReturn available_ego_masks_return = 23;
+    }
+}

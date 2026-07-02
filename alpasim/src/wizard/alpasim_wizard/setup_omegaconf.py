@@ -1,0 +1,234 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2025-2026 NVIDIA Corporation
+
+"""
+Contains the code necessary for any entrypoint which uses Hydra to parse a config file
+(currently the main wizard entry point and check_config).
+
+Sets up the logger and config schema for the wizard, and provides a main_wrapper function.
+"""
+
+import logging
+import os
+from typing import Callable
+
+import hydra
+from alpasim_utils.paths import find_repo_root
+from hydra.core.config_store import ConfigStore
+from hydra.core.global_hydra import GlobalHydra
+from hydra.core.hydra_config import HydraConfig
+from omegaconf import DictConfig, MissingMandatoryValue, OmegaConf
+
+from .schema import AlpasimConfig, RunMode
+
+logger = logging.getLogger("alpasim_wizard")
+
+cs = ConfigStore.instance()
+# Registering the Config class with the name 'config'.
+cs.store(name="config_schema", node=AlpasimConfig)
+
+REPO_ROOT = find_repo_root(__file__)
+
+
+def _list_config_group_options(group: str) -> list[str]:
+    """List available options for a Hydra config group by scanning the search path.
+
+    Returns sorted list of config names (without extension) found under
+    ``group/`` across all Hydra search paths.
+    """
+
+    gh = GlobalHydra.instance()
+    if not gh.is_initialized():
+        return []
+
+    config_loader = gh.config_loader()
+    try:
+        options = config_loader.get_group_options(group)
+    except (
+        hydra.errors.HydraException,
+        KeyError,
+    ):  # Hydra may raise various internal errors for missing/invalid groups
+        options = []
+    # Filter out companion configs (e.g., vavam_configs, dino_configs used by driver defaults)
+    options = [o for o in options if not o.endswith("_configs")]
+    return sorted(set(options))
+
+
+def _is_missing_or_empty(cfg: AlpasimConfig, path: str) -> bool:
+    """Check if a config value is MISSING or an empty DictConfig.
+
+    Some config groups (e.g., driver) default to an empty DictConfig in the
+    schema, so MISSING never survives the merge.  An empty dict means the
+    user didn't select a config for that group.
+    """
+    try:
+        val = OmegaConf.select(cfg, path, throw_on_missing=True)  # type: ignore[arg-type]
+    except MissingMandatoryValue:
+        return True
+    if isinstance(val, DictConfig) and len(val) == 0:
+        return True
+    return False
+
+
+def _check_required_config_groups(cfg: AlpasimConfig) -> None:
+    """Check that all required Hydra config groups were specified.
+
+    Detects MISSING sentinel values left behind when a required config
+    group (deploy, topology, driver) was not provided on the command line,
+    and raises a single helpful error listing everything that's missing.
+    Available options are discovered dynamically from the Hydra search path.
+    """
+    # Each entry: (dotted config path to probe, Hydra group name, CLI syntax)
+    required_checks = [
+        ("defines.filesystem", "deploy", "deploy=<target>"),
+        ("services.sensorsim.replicas_per_container", "topology", "topology=<layout>"),
+        ("driver", "driver", "driver=<model>"),
+    ]
+
+    missing = []
+    for path, group, arg in required_checks:
+        if _is_missing_or_empty(cfg, path):
+            options = _list_config_group_options(group)
+            hint = f"  {arg:30s}"
+            if options:
+                hint += f"  (available: {', '.join(options)})"
+            missing.append(hint)
+
+    if missing:
+        lines = ["", "Missing required configuration:"]
+        lines.extend(missing)
+        lines.append("")
+        lines.append("Example:")
+        lines.append(
+            "  uv run alpasim_wizard deploy=local topology=1gpu"
+            " driver=vavam wizard.log_dir=./out"
+        )
+        lines.append("")
+        raise SystemExit("\n".join(lines))
+
+
+def validate_config(cfg: AlpasimConfig) -> None:
+    """Validate the configuration for consistency and completeness.
+
+    This function performs all validation checks that should happen
+    after the configuration is loaded but before it's used.
+    """
+    _check_required_config_groups(cfg)
+
+    # Validate NRE version configuration
+    if cfg.scenes.nre_version_string is None and not cfg.services.sensorsim:
+        raise RuntimeError(
+            "Either `scenes.nre_version_string` or `services.sensorsim.image` must be set "
+            "to determine the NRE version."
+        )
+
+    # Validate service list
+    services_dict = OmegaConf.to_container(cfg.services) or {}
+    if cfg.wizard.run_sim_services:
+        undefined_services = [
+            s for s in cfg.wizard.run_sim_services if s not in services_dict
+        ]
+        if undefined_services:
+            raise RuntimeError(
+                f"Services {undefined_services} in `wizard.run_sim_services` "
+                f"are not defined in the `services` section."
+            )
+
+    if cfg.wizard.run_mode != RunMode.BATCH:
+        total_services = len(cfg.wizard.run_sim_services or [])
+        if total_services != 1:
+            raise AssertionError(
+                "When specifying a run mode other than BATCH, "
+                "only one service may be run in run_sim_services."
+            )
+
+
+def update_scene_config(cfg: AlpasimConfig) -> None:
+    """Remove scene_ids from the config if multiple scene sources are specified or
+    add all available artifacts if source is set to local and scene_ids is None.
+
+    Only one of scene_ids or test_suite_id should be specified in the config.
+    However, we specify a default scene_ids in base_config.yaml, requiring
+    users to explicitly set scene_ids to None if they want to use a
+    test_suite_id.
+
+    This function removes this requirement by removing scene_ids from the config
+    if:
+    - exactly one of scene_ids or test_suite_id is specified in the command line
+        arguments
+    - scene_ids has exactly one element (which we assume to be the default one)
+    """
+    scene_config = cfg.scenes
+
+    # Database scene handling
+    scene_config_keys = ("scene_ids", "test_suite_id")
+    if sum(getattr(scene_config, key) is not None for key in scene_config_keys) == 1:
+        # Exactly one specified in config, all good, no need to do anything.
+        return
+
+    hydra_cfg = HydraConfig.get()
+    cmd_line_overrides = hydra_cfg.overrides.task
+    cmd_line_overrides_str = " ".join(cmd_line_overrides)
+
+    # We specify a default scene_id in the config so simulations can run by default.
+    # However, when users specify test_suite_id on the command line, we need to
+    # clear the default scene_ids to avoid conflicts.
+    # Here, we check that exactly one scene source was specified via command line
+    # and scene_ids has only one element (which we assume to be the default one).
+    if (
+        sum(key in cmd_line_overrides_str for key in scene_config_keys) == 1
+        and scene_config.scene_ids is not None
+        and len(scene_config.scene_ids) == 1
+    ):
+        scene_config.scene_ids = None
+
+
+def cmd_line_args(cfg: DictConfig) -> str:
+    """Returns a (possibly nested) config as a string of cmd line args."""
+
+    def _convert_to_cmd_line_args_list(cfg: DictConfig, prefix: str = "") -> list[str]:
+        args = []
+        for key, value in cfg.items():
+            if isinstance(value, DictConfig):
+                args.extend(
+                    _convert_to_cmd_line_args_list(value, f"{prefix}{str(key)}.")
+                )
+            else:
+                args.append(f"{prefix}{str(key)}='{str(value)}'")
+        return args
+
+    # Need to escape $ so that omegaconf doesn't interpolate it
+    # (e.g. if we want to pass ${num_historical_waypoints} as a command line argument)
+    return " ".join(_convert_to_cmd_line_args_list(cfg)).replace("$", r"\$")
+
+
+def _read_repo_version() -> str:
+    """Read the project version from the root pyproject.toml."""
+    import tomllib
+
+    with open(REPO_ROOT / "pyproject.toml", "rb") as f:
+        data = tomllib.load(f)
+    return data["project"]["version"]
+
+
+OmegaConf.register_new_resolver("repo-relative", lambda path: str(REPO_ROOT / path))
+OmegaConf.register_new_resolver("cmd-line-args", lambda cfg: cmd_line_args(cfg))
+OmegaConf.register_new_resolver("or", lambda a, b: a or b)
+OmegaConf.register_new_resolver("repo-version", _read_repo_version)
+
+
+def main_wrapper(main: Callable) -> None:
+    """Wraps a main function with Hydra config parsing."""
+    config_path = REPO_ROOT / "src" / "wizard" / "configs"
+    if not os.path.isdir(config_path):
+        raise OSError(
+            f"Wizard config dir not found at {config_path=}. "
+            "Make sure you're invoking the wizard from the alpasim-docker repo root "
+            f"or a directory below it (detected {os.getcwd()=})."
+        )
+
+    main_with_bound_config = hydra.main(
+        config_name="base_config.yaml", version_base="1.3", config_path=str(config_path)
+    )(main)
+
+    main_with_bound_config()
