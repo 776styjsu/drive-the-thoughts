@@ -1,29 +1,29 @@
 # Drive the Thoughts Artifact
 
-This repository is the artifact for the paper "Drive the Thoughts: Runtime
-Monitoring of VLA Reasoning-Trajectory Consistency".
+This repository accompanies the paper "Drive the Thoughts: Runtime Monitoring
+of VLA Reasoning-Trajectory Consistency".
 
-The artifact has two reproduction tiers:
+It supports two reproduction paths:
 
-1. A lightweight data-first tier that recomputes checks, tables, and plots from
-   the released benchmark plus JSON monitor outputs.
-2. A pinned AlpaSim source tier under `alpasim/` for reviewers who want to
-   inspect or attempt full simulator reruns.
+1. Use the lightweight, data-first path to recompute checks, tables, and plots
+   from the released benchmark and JSON monitor outputs.
+2. Use the pinned AlpaSim source under `alpasim/` if you want to inspect the
+   simulator setup or attempt full simulator reruns.
 
-Apptainer is the tested environment path for AlpaSim. Docker/local Python can
-be attempted on a best-effort basis, but is not guaranteed.
+Use Apptainer for AlpaSim. The README intentionally avoids documenting
+alternate simulator setup paths so the supported workflow stays focused.
 
 ## Layout
 
-- `data/benchmark/benchmark.json`: canonical benchmark (150 entries, 100 in
-  the reliable subset) with artifact-relative media paths.
+- `data/benchmark/benchmark.json`: canonical benchmark with 150 entries, 100
+  of them in the reliable subset, using artifact-relative media paths.
 - `data/results/llm_matrix/`: raw LLM judge outputs over the reliable subset.
 - `data/results/rule/benchmark.rule_consistency.json`: deterministic rule
   monitor output (produced with `--match-mode exact`).
 - `data/media/videos/`, `data/media/scenes/`: rollout videos and per-clip
   scene directories (`metadata.json`, `trajectory_plot_geometry.json`,
   `additional_info.json`, camera frame).
-- `src/`: the monitor implementation as installable packages:
+- `src/`: installable packages for the monitor implementation:
   - `alpasim_utils/`: shared monitor core — rule-based CoT parsing and
     consistency matching, trajectory features, lane projection, and the
     OpenAI-compatible LLM judge client (`alpasim_utils.cot_consistency`).
@@ -32,47 +32,30 @@ be attempted on a best-effort basis, but is not guaranteed.
     (`python -m cot_analysis.consistency_check`).
   - `trajectory_safety/`: geometric safety outcomes for planned trajectories
     (`python -m trajectory_safety`, Experiment A).
-  - `benchmark_analysis/`: shared analysis library (benchmark loading, entry
-    schema accessors, judgment normalization, classification metrics) used by
-    every script in `tools/`.
+  - `benchmark_analysis/`: shared analysis library used by every script in
+    `tools/` for benchmark loading, entry schema accessors, judgment
+    normalization, and classification metrics.
 - `tools/`: thin analysis/plotting CLIs plus serving and Slurm helpers.
 - `tests/`: unit tests (`uv run pytest`).
 - `alpasim/`: pinned AlpaSim workspace snapshot with its own `pyproject.toml`
-  and `uv.lock`, kept frozen for provenance. Generated rollouts, caches,
-  model/data artifacts, paper source, secrets, and obsolete benchmark variants
-  are intentionally not included.
+  and `uv.lock`. We keep it frozen for provenance and intentionally omit
+  generated rollouts, caches, model/data artifacts, paper source, secrets, and
+  obsolete benchmark variants.
 
 ## Lightweight Setup
 
-The recommended lightweight path uses `uv` from the artifact root:
+For the lightweight path, run `uv` from the artifact root:
 
 ```bash
 uv sync --frozen
 ```
 
-This installs the small dependency set and the `src/` packages, so
-`uv run ...` works for every command below without PYTHONPATH tweaks.
+This installs the small dependency set and the `src/` packages. After that,
+`uv run ...` works for every command below without PYTHONPATH changes.
 
-Plain Python fallback:
-
-```bash
-python3.11 -m venv .venv
-source .venv/bin/activate
-python -m pip install -U pip
-python -m pip install -r requirements-artifact.txt
-export PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
-```
-
-Optional Conda fallback:
-
-```bash
-conda env create -f environment-artifact.yml
-conda activate drive-the-thoughts-artifact
-export PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
-```
-
-Optional extras: `uv sync --extra llm` adds the `openai` client needed to
-rerun the LLM judge; `--extra xlsx` adds `openpyxl` for spreadsheet output.
+Optional extras: use `uv sync --extra llm` to add the `openai` client for LLM
+judge reruns, and `uv sync --extra xlsx` to add `openpyxl` for spreadsheet
+output.
 
 ## Quick Checks
 
@@ -93,8 +76,8 @@ uv run python tools/check_consistency_accuracy.py \
   --reliable-only
 ```
 
-Regenerate the main-evaluation figure and the reliability heatmap (defaults
-point at the released data):
+Regenerate the main-evaluation figure and the reliability heatmap. The default
+inputs point at the released data:
 
 ```bash
 uv run python tools/plot_repeated_main_eval.py --output repeated_main_eval.pdf
@@ -109,7 +92,7 @@ uv run pytest
 
 ## Recomputing Monitor Outputs
 
-The deterministic rule monitor is fully rerunnable offline and reproduces
+You can rerun the deterministic rule monitor fully offline. It reproduces
 `data/results/rule/benchmark.rule_consistency.json` exactly:
 
 ```bash
@@ -119,9 +102,9 @@ uv run python -m cot_analysis.consistency_check \
   --output benchmark.rule_consistency.json
 ```
 
-The LLM judge runs need API access (or a local vLLM server for Qwen; see
-`tools/serve_qwen_vllm.sh`). A dry run without keys verifies the trajectory
-feature pipeline:
+The LLM judge needs API access, or a local vLLM server for Qwen through
+`tools/serve_qwen_vllm.sh`. You can run the command below without keys to
+verify the trajectory feature pipeline:
 
 ```bash
 uv run python -m cot_analysis \
@@ -131,13 +114,14 @@ uv run python -m cot_analysis \
   --output cot_dry.json
 ```
 
-`tools/run_benchmark_llm_matrix.py` orchestrates the full provider/variant
-matrix (repeated runs, manifests, logs) into `runs/llm_matrix/`;
-`tools/run_benchmark_llm_matrix_update.slurm.sh` wraps it for Slurm clusters.
+`tools/run_benchmark_llm_matrix.py` runs the full provider/variant matrix and
+writes repeated runs, manifests, and logs to `runs/llm_matrix/`.
+`tools/run_benchmark_llm_matrix_update.slurm.sh` wraps the same workflow for
+Slurm clusters.
 
 ## AlpaSim Setup
 
-The full simulator tier keeps AlpaSim isolated in `alpasim/` so its `uv`
+The full simulator tier keeps AlpaSim isolated in `alpasim/`, so its `uv`
 workspace and lockfile do not interfere with the lightweight artifact tools:
 
 ```bash
@@ -146,16 +130,18 @@ source setup_local_env.sh
 uv sync --frozen
 ```
 
-Use `uv run ...` from inside `alpasim/` for simulator commands. This source
-snapshot is intended to preserve the implementation context and Apptainer
-setup, not to bundle the full upstream data/model store. Large generated data
-and rollouts are omitted; benchmark media needed for the JSON-output tier
-lives in the artifact root under `data/media/`. Note that `alpasim/` predates
-the cleanup of the artifact's own `src/` and `tools/`, so its copies of the
-monitor code reflect the original workspace layout.
+Run simulator commands with `uv run ...` from inside `alpasim/`. This source
+snapshot preserves the implementation context and Apptainer setup, but it does
+not bundle the full upstream data/model store. We omit large generated data and
+rollouts; the benchmark media needed for the JSON-output tier lives in the
+artifact root under `data/media/`.
+
+Note that `alpasim/` predates the cleanup of this artifact's own `src/` and
+`tools/`, so its monitor-code copies still reflect the original workspace
+layout.
 
 ## Validation
 
-`ARTIFACT_REPORT.json` records warnings/errors from the original staging run
-of this artifact. The per-result-file checks there (result counts vs. the
-reliable subset) still describe the shipped `data/` contents.
+`ARTIFACT_REPORT.json` records warnings and errors from the original artifact
+staging run. Its per-result-file checks, including result counts against the
+reliable subset, still describe the shipped `data/` contents.
