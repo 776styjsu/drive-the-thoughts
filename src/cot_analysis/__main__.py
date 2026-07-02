@@ -34,7 +34,7 @@ Usage:
         --output /tmp/cot_dry.json
 
     # Full run with GPT-5.5 high on the lane-relative feature variant:
-    uv run python -m cot_analysis --provider openai \
+    uv run --extra llm python -m cot_analysis --provider openai \
         --benchmark_json data/benchmark/benchmark.json \
         --prompt center_of_lane_v5 --trajectory_frame dual \
         --lane_reference map_graph \
@@ -42,7 +42,7 @@ Usage:
 
     # Full run with local Qwen3.5-4B FP8 (serve it first):
     tools/serve_qwen_vllm.sh qwen35 serve
-    uv run python -m cot_analysis --provider qwen35_4b_fp8 \
+    uv run --extra llm python -m cot_analysis --provider qwen35_4b_fp8 \
         --benchmark_json data/benchmark/benchmark.json \
         --output cot_consistency_qwen35_4b_fp8.json
 """

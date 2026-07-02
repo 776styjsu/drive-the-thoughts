@@ -255,7 +255,7 @@ common_args=(
 
 if [[ "$RUN_GPT_KIMI" == "1" ]]; then
   echo "[$(date)] Running GPT/Kimi matrix update"
-  uv run python tools/run_benchmark_llm_matrix.py \
+  uv run --extra llm python tools/run_benchmark_llm_matrix.py \
     "${common_args[@]}" \
     -n "$N" \
     --output-dir "$GPT_KIMI_STAGE" \
@@ -278,7 +278,7 @@ if [[ "$RUN_QWEN35" == "1" ]]; then
   wait_for_qwen35
 
   echo "[$(date)] Running qwen35 deterministic matrix update"
-  uv run python tools/run_benchmark_llm_matrix.py \
+  uv run --extra llm python tools/run_benchmark_llm_matrix.py \
     "${common_args[@]}" \
     -n "$QWEN35_N" \
     --output-dir "$QWEN35_STAGE" \

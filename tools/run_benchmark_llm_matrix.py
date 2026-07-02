@@ -40,6 +40,8 @@ PROVIDERS: tuple[tuple[str, str], ...] = (
     ("gpt", "openai"),
 )
 
+UV_RUN_LLM = ("uv", "run", "--extra", "llm")
+
 
 @dataclass(frozen=True)
 class RunSpec:
@@ -333,8 +335,7 @@ def _command_for_spec(
     seed: int,
 ) -> list[str]:
     cmd = [
-        "uv",
-        "run",
+        *UV_RUN_LLM,
         "python",
         "-m",
         args.module,

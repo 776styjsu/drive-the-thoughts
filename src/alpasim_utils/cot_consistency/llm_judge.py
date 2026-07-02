@@ -197,7 +197,16 @@ def resolve_provider(
 
 def build_client(api_key: str, base_url: str | None) -> Any:
     """Create an OpenAI client pointed at the (possibly self-hosted) endpoint."""
-    from openai import OpenAI
+    try:
+        from openai import OpenAI
+    except ModuleNotFoundError as exc:
+        if exc.name != "openai":
+            raise
+        raise RuntimeError(
+            "The LLM judge requires the OpenAI-compatible SDK. Install or run "
+            "with the project's llm extra, for example: "
+            "`uv sync --extra llm` or `uv run --extra llm python -m cot_analysis ...`."
+        ) from exc
 
     return OpenAI(api_key=api_key, base_url=base_url)
 

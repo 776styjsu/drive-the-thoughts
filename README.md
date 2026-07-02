@@ -59,8 +59,8 @@ This installs the small dependency set and the `src/` packages. After that,
 `uv run ...` works for every command below without PYTHONPATH changes.
 
 Optional extras: use `uv sync --extra llm` to add the `openai` client for LLM
-judge reruns, and `uv sync --extra xlsx` to add `openpyxl` for spreadsheet
-output.
+judge reruns (or prefix one-off LLM commands with `uv run --extra llm`), and
+`uv sync --extra xlsx` to add `openpyxl` for spreadsheet output.
 
 ## Quick Checks
 
@@ -126,6 +126,8 @@ uv run python -m cot_analysis \
 
 `tools/run_benchmark_llm_matrix.py` runs the full provider/variant matrix and
 writes repeated runs, manifests, and logs to `runs/llm_matrix/`.
+If you have not already synced the `llm` extra, run it as
+`uv run --extra llm python tools/run_benchmark_llm_matrix.py ...`.
 `tools/run_benchmark_llm_matrix_update.slurm.sh` wraps the same workflow for
 Slurm clusters.
 
