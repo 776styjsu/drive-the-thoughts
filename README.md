@@ -108,8 +108,13 @@ uv run python -m cot_analysis.consistency_check \
 ```
 
 The LLM judge needs API access, or a local vLLM server for Qwen through
-`tools/serve_qwen_vllm.sh`. You can run the command below without keys to
-verify the trajectory feature pipeline:
+`tools/serve_qwen_vllm.sh`. All backends speak the OpenAI-compatible API:
+`--provider kimi` targets Moonshot's public endpoint (key: `MOONSHOT_API_KEY`)
+and `--provider openai` targets OpenAI (key: `OPENAI_API_KEY`). Pass keys with
+`--api_key`, per-provider `--*-api-key` flags on the matrix runner, the
+environment, or a `.env` file; point `--base_url`/`--model` at any other
+OpenAI-compatible host (e.g. OpenRouter) without code changes. You can run the
+command below without keys to verify the trajectory feature pipeline:
 
 ```bash
 uv run python -m cot_analysis \

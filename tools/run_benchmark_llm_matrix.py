@@ -4,9 +4,15 @@
 
 """Run benchmark CoT judge matrix across providers and feature variants.
 
-Runs Qwen, Kimi, and GPT for:
+Runs Qwen (local vLLM), Kimi (Moonshot API), and GPT (OpenAI API) for:
 - llm: default prompt.py with ego-frame trajectory features.
 - f_llm_map_graph: prompt center_of_lane_v5 with dual/map_graph features.
+
+API keys come from --kimi-api-key/--gpt-api-key/--qwen-api-key, falling back
+to each provider's environment variable (also loaded from .env by
+cot_analysis). Keys given as arguments reach the runs through the subprocess
+environment, never through the command line, so they do not appear in logs or
+the manifest.
 
 Each run delegates to ``cot_analysis`` with ``--resume`` enabled and writes a
 separate JSON result plus a log file under the output directory.
@@ -24,12 +30,13 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+from alpasim_utils.cot_consistency import PROVIDERS as JUDGE_PROVIDERS
 from benchmark_analysis import cot_reliability_flag, extract_entries, load_json
 
 
 PROVIDERS: tuple[tuple[str, str], ...] = (
     ("qwen", "qwen35_4b_fp8"),
-    ("kimi", "gateway"),
+    ("kimi", "kimi"),
     ("gpt", "openai"),
 )
 
@@ -144,6 +151,31 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=repo_root / ".hf-cache",
         help="Hugging Face cache directory for local Qwen/vLLM state. Default: %(default)s",
+    )
+    parser.add_argument(
+        "--kimi-api-key",
+        default=None,
+        help=(
+            "API key for the kimi provider. Overrides the MOONSHOT_API_KEY "
+            "environment variable."
+        ),
+    )
+    parser.add_argument(
+        "--gpt-api-key",
+        default=None,
+        help=(
+            "API key for the gpt provider. Overrides the OPENAI_API_KEY "
+            "environment variable."
+        ),
+    )
+    parser.add_argument(
+        "--qwen-api-key",
+        default=None,
+        help=(
+            "API key for the qwen provider. Overrides the QWEN35_API_KEY "
+            "environment variable; the local vLLM default is EMPTY, so this "
+            "is only needed for a secured server."
+        ),
     )
     parser.add_argument(
         "--providers",
@@ -397,6 +429,12 @@ def main() -> int:
     env.setdefault("QWEN35_BASE_URL", "http://localhost:8000/v1")
     env.setdefault("QWEN35_API_KEY", "EMPTY")
     env.pop("VIRTUAL_ENV", None)
+    # Keys given as arguments travel via the environment, not the command
+    # line, so they stay out of the printed commands, logs, and manifest.
+    for label, provider in PROVIDERS:
+        api_key = getattr(args, f"{label}_api_key")
+        if api_key:
+            env[JUDGE_PROVIDERS[provider]["api_key_env"]] = api_key
 
     manifest: dict[str, object] = {
         "created_utc": datetime.now(timezone.utc).isoformat(),

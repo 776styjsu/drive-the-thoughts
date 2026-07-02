@@ -14,15 +14,18 @@ AlpaSim ASL rollout logs requires the full simulator workspace (see the pinned
 
 Model backends are selectable with --provider (see
 ``alpasim_utils.cot_consistency.llm_judge.PROVIDERS``):
-    gateway       - Kimi K2.5 via the institutional GenAI gateway (key: GENAI_GATEWAY_KEY)
+    kimi          - Kimi K2.5 via the Moonshot API (key: MOONSHOT_API_KEY)
     openai        - GPT-5.5 with high reasoning effort (key: OPENAI_API_KEY)
     qwen3_4b_fp8  - Qwen3-4B-FP8 via a local vLLM server
     qwen35_4b_fp8 - Qwen3.5-4B-FP8 via a local vLLM server
 
-Keys are read from the matching environment variable, also loaded from a .env
-file at/above the working directory. Backends decode deterministically
-(temperature=0 plus a fixed --seed). Without a key the tool runs in dry-run
-mode (trajectory analysis only).
+Keys come from --api_key or the matching environment variable, also loaded
+from a .env file at/above the working directory. Any other OpenAI-compatible
+host works through --base_url/--model overrides (e.g. OpenRouter with
+``--provider kimi --base_url https://openrouter.ai/api/v1 --model
+moonshotai/kimi-k2.5``). Backends decode deterministically (temperature=0
+plus a fixed --seed). Without a key the tool runs in dry-run mode (trajectory
+analysis only).
 
 Usage:
     # Dry run (no API key, verifies trajectory analysis):
@@ -116,7 +119,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--provider",
         type=str,
         choices=sorted(PROVIDERS),
-        default="gateway",
+        default="kimi",
         help=(
             "Model backend. Determines the default model, API key env var, "
             "base URL, and provider-specific request parameters."
@@ -150,7 +153,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--delay",
         type=float,
         default=1.0,
-        help="Delay between API calls in seconds (the gateway allows ~60/min)",
+        help="Delay between API calls in seconds (for rate-limited endpoints)",
     )
     parser.add_argument(
         "--prompt",
