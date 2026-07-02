@@ -38,9 +38,14 @@ alternate simulator setup paths so the supported workflow stays focused.
 - `tools/`: thin analysis/plotting CLIs plus serving and Slurm helpers.
 - `tests/`: unit tests (`uv run pytest`).
 - `alpasim/`: pinned AlpaSim workspace snapshot with its own `pyproject.toml`
-  and `uv.lock`. We keep it frozen for provenance and intentionally omit
-  generated rollouts, caches, model/data artifacts, paper source, secrets, and
-  obsolete benchmark variants.
+  and `uv.lock`. It intentionally omits generated rollouts, caches, model/data
+  artifacts, paper source, secrets, and obsolete benchmark variants. It keeps
+  exactly the monitor code the simulator itself runs — the rule-based
+  consistency core and the LLM-judge subpackage in `alpasim_utils`, consumed
+  by the online `ConsistencyMonitor` in `alpasim_runtime` and the eval scorer.
+  Offline analysis code that duplicated this repo's `src/` and `tools/` has
+  been removed from the snapshot; the maintained versions live at the artifact
+  root.
 
 ## Lightweight Setup
 
@@ -136,9 +141,12 @@ not bundle the full upstream data/model store. We omit large generated data and
 rollouts; the benchmark media needed for the JSON-output tier lives in the
 artifact root under `data/media/`.
 
-Note that `alpasim/` predates the cleanup of this artifact's own `src/` and
-`tools/`, so its monitor-code copies still reflect the original workspace
-layout.
+The snapshot no longer carries its own copies of the offline analysis
+packages (`cot_analysis`, `trajectory_safety`) or the benchmark
+plotting/serving tools; use the maintained versions in this repo's `src/` and
+`tools/` instead. Simulator-side monitoring is unaffected: the online
+`ConsistencyMonitor` and the `cot_consistency` eval scorer, plus the
+`alpasim_utils` modules they need, remain part of the workspace.
 
 ## Validation
 

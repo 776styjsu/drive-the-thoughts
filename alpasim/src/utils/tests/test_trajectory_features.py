@@ -3,7 +3,7 @@
 
 import numpy as np
 
-from cot_analysis.trajectory import compute_trajectory_features
+from alpasim_utils.cot_consistency import compute_trajectory_features
 
 
 def test_map_graph_same_lane_uses_only_the_starting_lane() -> None:
