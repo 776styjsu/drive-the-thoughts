@@ -1,7 +1,11 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "drive-the-thoughts-artifact"
 version = "0.1.0"
-description = "Lightweight reproduction environment for the Drive the Thoughts artifact"
+description = "Reproduction environment for the Drive the Thoughts artifact"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 dependencies = [
@@ -12,9 +16,20 @@ dependencies = [
   "pytest",
 ]
 
-[tool.uv]
-package = false
+[project.optional-dependencies]
+# Needed only to rerun the LLM judge (cot_analysis / run_benchmark_llm_matrix).
+llm = ["openai"]
+# Needed only for .xlsx output from build_consistency_spreadsheet.
+xlsx = ["openpyxl"]
+
+[tool.hatch.build.targets.wheel]
+packages = [
+  "src/alpasim_utils",
+  "src/benchmark_analysis",
+  "src/cot_analysis",
+  "src/trajectory_safety",
+]
 
 [tool.pytest.ini_options]
-pythonpath = ["src/utils", "src/tools"]
-testpaths = ["src/utils/tests", "src/tools/tests"]
+pythonpath = ["src"]
+testpaths = ["tests"]

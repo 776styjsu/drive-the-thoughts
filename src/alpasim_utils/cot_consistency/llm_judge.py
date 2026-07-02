@@ -1,25 +1,26 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2026 NVIDIA Corporation
 
-"""Minimal OpenAI-compatible LLM client for CoT-consistency judging.
+"""OpenAI-compatible LLM client for CoT-consistency judging.
 
-This is the trimmed, dependency-light core shared by the in-loop runtime
-``ConsistencyMonitor`` and any other caller that cannot depend on the
-``alpasim-tools`` package (``alpasim-tools`` depends on ``alpasim_runtime``, so
-the runtime cannot import it back). It mirrors the provider table and the
-JSON-parsing behaviour of ``cot_analysis/__main__.py`` but drops the per-call
-timing instrumentation. ``openai`` is imported lazily so importing this module
-never requires the SDK.
-
-The heavier offline CLI (``cot_analysis/__main__.py``) keeps its own richer
-``call_llm``; this module is intentionally a separate, leaner implementation.
+The single client implementation shared by the offline ``cot_analysis`` CLI
+and the in-loop runtime ``ConsistencyMonitor``. It lives in ``alpasim_utils``
+because the runtime cannot depend on the tools package (which depends on the
+runtime), and keeping one provider table and one request path guarantees the
+online monitor and the offline judge behave identically when pointed at the
+same backend. ``openai`` is imported lazily so importing this module never
+requires the SDK.
 """
 
 from __future__ import annotations
 
+import base64
+import io
 import json
 import logging
 import os
+import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -202,24 +203,52 @@ def build_client(api_key: str, base_url: str | None) -> Any:
 # =============================================================================
 
 
+def image_to_data_url(image: Any) -> str | None:
+    """Encode a PIL image as a base64 JPEG data URL for the chat API."""
+    try:
+        buffer = io.BytesIO()
+        image.convert("RGB").save(buffer, format="JPEG", quality=90)
+        encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+        return f"data:image/jpeg;base64,{encoded}"
+    except Exception:
+        return None
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
 def call_llm(
     client: Any,
     model_name: str,
     prompt: str,
+    image: Any = None,
     *,
     seed: int = DEFAULT_SEED,
     temperature: float | None = 0,
     extra_params: dict | None = None,
-) -> str:
-    """Send the prompt to the model and return the response text.
+    return_timing: bool = False,
+) -> str | tuple[str, dict]:
+    """Send the prompt (+ optional PIL image) and return the response text.
 
     Decoding is deterministic via a fixed seed where supported. ``temperature``
     is sent only when not None (reasoning models reject non-default values).
     ``extra_params`` carries provider-specific request fields. The call streams
     and accumulates the content delta, which the institutional Open WebUI gateway requires
     and other OpenAI-compatible servers (vLLM, OpenAI) support.
+
+    With ``return_timing=True`` the return value is ``(text, timing)`` where
+    ``timing`` records per-attempt latency (stream open, first chunk, first
+    content token) for the artifact's runtime-overhead reporting.
     """
     global _USE_JSON_MODE
+
+    user_content: str | list[dict] = prompt
+    if image is not None:
+        user_content = [{"type": "text", "text": prompt}]
+        data_url = image_to_data_url(image)
+        if data_url is not None:
+            user_content.append({"type": "image_url", "image_url": {"url": data_url}})
 
     messages = [
         {
@@ -229,10 +258,27 @@ def call_llm(
                 "systems. Respond with ONLY a single JSON object, no markdown."
             ),
         },
-        {"role": "user", "content": prompt},
+        {"role": "user", "content": user_content},
     ]
 
+    timing: dict = {
+        "model": model_name,
+        "stream": True,
+        "started_at_utc": _utc_now_iso(),
+        "attempts": [],
+    }
+    total_start = time.perf_counter()
+
     def _create(use_json: bool) -> str:
+        attempt_start = time.perf_counter()
+        attempt: dict = {
+            "json_mode": use_json,
+            "started_at_utc": _utc_now_iso(),
+            "status": "started",
+            "chunk_count": 0,
+            "content_chunk_count": 0,
+            "output_chars": 0,
+        }
         kwargs: dict = {
             "model": model_name,
             "messages": messages,
@@ -246,17 +292,53 @@ def call_llm(
         if use_json:
             kwargs["response_format"] = {"type": "json_object"}
         parts: list[str] = []
-        stream = client.chat.completions.create(**kwargs)
-        for chunk in stream:
-            if not chunk.choices:
-                continue
-            delta = chunk.choices[0].delta
-            if delta and delta.content:
-                parts.append(delta.content)
-        return "".join(parts)
+        first_chunk_elapsed_s = None
+        first_content_elapsed_s = None
+        try:
+            stream = client.chat.completions.create(**kwargs)
+            attempt["stream_open_elapsed_s"] = time.perf_counter() - attempt_start
+            for chunk in stream:
+                now = time.perf_counter()
+                attempt["chunk_count"] += 1
+                if first_chunk_elapsed_s is None:
+                    first_chunk_elapsed_s = now - attempt_start
+                if not chunk.choices:
+                    continue
+                delta = chunk.choices[0].delta
+                if delta and delta.content:
+                    attempt["content_chunk_count"] += 1
+                    if first_content_elapsed_s is None:
+                        first_content_elapsed_s = now - attempt_start
+                    parts.append(delta.content)
+            response_text = "".join(parts)
+            attempt["status"] = "ok"
+            attempt["output_chars"] = len(response_text)
+            return response_text
+        except Exception as exc:
+            attempt["status"] = "error"
+            attempt["error_type"] = type(exc).__name__
+            attempt["error"] = str(exc)
+            raise
+        finally:
+            attempt["first_chunk_elapsed_s"] = first_chunk_elapsed_s
+            attempt["first_content_elapsed_s"] = first_content_elapsed_s
+            attempt["total_elapsed_s"] = time.perf_counter() - attempt_start
+            attempt["ended_at_utc"] = _utc_now_iso()
+            timing["attempts"].append(attempt)
+            logger.debug(
+                "llm_attempt_timing: status=%s json_mode=%s total=%.3fs "
+                "chunks=%d content_chunks=%d output_chars=%d",
+                attempt["status"],
+                use_json,
+                attempt["total_elapsed_s"],
+                attempt["chunk_count"],
+                attempt["content_chunk_count"],
+                attempt["output_chars"],
+            )
 
     try:
-        return _create(_USE_JSON_MODE)
+        result = _create(_USE_JSON_MODE)
+        timing["status"] = "ok"
     except Exception as exc:
         # The gateway may reject response_format; retry once without it and
         # disable JSON mode for the remainder of the run.
@@ -264,13 +346,28 @@ def call_llm(
             try:
                 result = _create(False)
                 _USE_JSON_MODE = False
+                timing["status"] = "ok_after_retry"
                 logger.warning(
                     "Disabling JSON response_format (server rejected it): %s", exc
                 )
-                return result
             except Exception as exc2:  # pragma: no cover - surfaced to caller
-                return json.dumps({"error": str(exc2)})
-        return json.dumps({"error": str(exc)})
+                result = json.dumps({"error": str(exc2)})
+                timing["status"] = "error"
+                timing["error_type"] = type(exc2).__name__
+                timing["error"] = str(exc2)
+        else:
+            result = json.dumps({"error": str(exc)})
+            timing["status"] = "error"
+            timing["error_type"] = type(exc).__name__
+            timing["error"] = str(exc)
+
+    timing["retry_count"] = max(0, len(timing["attempts"]) - 1)
+    timing["total_elapsed_s"] = time.perf_counter() - total_start
+    timing["ended_at_utc"] = _utc_now_iso()
+    timing["output_chars"] = len(result)
+    if return_timing:
+        return result, timing
+    return result
 
 
 def parse_response(response_text: str) -> dict:

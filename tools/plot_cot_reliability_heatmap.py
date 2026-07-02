@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 NVIDIA Corporation
 
 """Plot CoT reliability coverage as a scenario-by-CoT heatmap.
 
@@ -9,26 +10,33 @@ Default axes:
 
 Examples:
     uv run python tools/plot_cot_reliability_heatmap.py \
-        --benchmark benchmark_expanded_100.json
+        --benchmark data/benchmark/benchmark.json
 
     uv run python tools/plot_cot_reliability_heatmap.py \
-        --benchmark benchmark_expanded_100.json \
+        --benchmark data/benchmark/benchmark.json \
         --scenario-axis scene_uuid \
-        --output benchmark_expanded_100.scene_uuid_cot_reliability_heatmap.html
+        --output benchmark.scene_uuid_cot_reliability_heatmap.html
 """
 
 from __future__ import annotations
 
 import argparse
-import ast
 import csv
 import html
-import json
 import textwrap
 from collections import Counter, defaultdict
 from copy import copy
 from pathlib import Path
 from typing import Any, Iterable
+
+from benchmark_analysis import (
+    clean_cot,
+    cot_reliability_flag,
+    extract_entries,
+    load_json,
+    nurec_scene,
+)
+from benchmark_analysis.schema import cot_decision_label
 
 
 SCENARIO_AXES = (
@@ -103,8 +111,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--benchmark",
         type=Path,
-        default=Path("benchmark.json"),
-        help="Benchmark JSON file to plot.",
+        default=Path(__file__).resolve().parents[1]
+        / "data"
+        / "benchmark"
+        / "benchmark.json",
+        help="Benchmark JSON file to plot. Default: %(default)s",
     )
     parser.add_argument(
         "--output",
@@ -181,22 +192,6 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_benchmark(path: Path) -> list[dict[str, Any]]:
-    with path.open("r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    if isinstance(data, list):
-        return [entry for entry in data if isinstance(entry, dict)]
-
-    if isinstance(data, dict):
-        for key in ("examples", "entries", "results", "data"):
-            entries = data.get(key)
-            if isinstance(entries, list):
-                return [entry for entry in entries if isinstance(entry, dict)]
-
-    raise ValueError(f"{path} must contain a benchmark list or an object with entries")
-
-
 def first_seen(values: Iterable[str]) -> list[str]:
     seen: set[str] = set()
     ordered: list[str] = []
@@ -239,14 +234,6 @@ def list_label(value: Any) -> str:
     if value is None:
         return "unknown"
     return str(value)
-
-
-def nurec_scene(entry: dict[str, Any]) -> dict[str, Any]:
-    labels = entry.get("labels")
-    if not isinstance(labels, dict):
-        return {}
-    scene = labels.get("nurec_scene")
-    return scene if isinstance(scene, dict) else {}
 
 
 def vru_label(scene: dict[str, Any]) -> str:
@@ -362,62 +349,11 @@ def scene_uuid_from_clip(entry: dict[str, Any]) -> str | None:
 
 
 def cot_text(entry: dict[str, Any]) -> str:
-    value = entry.get("chain_of_thought")
-    if isinstance(value, list):
-        return " | ".join(str(item) for item in value)
-    if isinstance(value, str):
-        stripped = value.strip()
-        try:
-            parsed = ast.literal_eval(stripped)
-        except (SyntaxError, ValueError):
-            return stripped
-        if isinstance(parsed, list):
-            return " | ".join(str(item) for item in parsed)
-        return str(parsed)
-    if value is None:
-        return "unknown"
-    return str(value)
-
-
-def cot_axis_label(entry: dict[str, Any], axis: str) -> str:
-    decision_label = (
-        entry.get("labels", {})
-        .get("cot_decision_label", {})
-        if isinstance(entry.get("labels"), dict)
-        else {}
-    )
-
-    if axis == "chain_of_thought":
-        return cot_text(entry)
-
-    if axis == "decision":
-        decision = decision_label.get("high_level_decision", {})
-        if not isinstance(decision, dict):
-            decision = {}
-        longitudinal = decision.get("longitudinal", "unknown")
-        lateral = decision.get("lateral", "unknown")
-        return f"{longitudinal} | {lateral}"
-
-    if axis == "meta_action":
-        action = decision_label.get("atomic_meta_action_hint", {})
-        if not isinstance(action, dict):
-            action = {}
-        longitudinal = action.get("longitudinal", "unknown")
-        lateral = action.get("lateral", "unknown")
-        return f"{longitudinal} | {lateral}"
-
-    raise ValueError(f"Unsupported CoT axis: {axis}")
+    return clean_cot(entry.get("chain_of_thought")) or "unknown"
 
 
 def cot_axis_components(entry: dict[str, Any], axis: str) -> dict[str, str]:
-    decision_label = (
-        entry.get("labels", {})
-        .get("cot_decision_label", {})
-        if isinstance(entry.get("labels"), dict)
-        else {}
-    )
-    if not isinstance(decision_label, dict):
-        decision_label = {}
+    decision_label = cot_decision_label(entry)
 
     if axis == "chain_of_thought":
         longitudinal = cot_text(entry)
@@ -490,15 +426,7 @@ def cot_axis_facets(entry: dict[str, Any], axis: str) -> list[dict[str, str]]:
 
 
 def causal_factor_label(entry: dict[str, Any]) -> str:
-    decision_label = (
-        entry.get("labels", {})
-        .get("cot_decision_label", {})
-        if isinstance(entry.get("labels"), dict)
-        else {}
-    )
-    if not isinstance(decision_label, dict):
-        return "none"
-
+    decision_label = cot_decision_label(entry)
     raw_categories = decision_label.get("critical_component_categories", [])
     categories = raw_categories if isinstance(raw_categories, list) else [raw_categories]
     allowed_categories = set(CAUSAL_FACTOR_FIELDS)
@@ -517,30 +445,6 @@ def causal_factor_label(entry: dict[str, Any]) -> str:
             key=lambda category: (order.get(category, len(order)), category),
         )
     )
-
-
-def reliability_value(value: Any) -> bool | None:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        normalized = value.strip().lower()
-        if normalized in {"true", "reliable", "yes", "1"}:
-            return True
-        if normalized in {"false", "unreliable", "no", "0"}:
-            return False
-    return None
-
-
-def entry_reliability(entry: dict[str, Any]) -> bool | None:
-    """Resolve a benchmark entry's reliability across both on-disk schemas.
-
-    - flat ``cot_reliable`` (bool/str), used by benchmark_expanded_*.json
-    - nested ``cot_reliability.reliable`` (bool), used by benchmark.json
-    """
-    nested = entry.get("cot_reliability")
-    if isinstance(nested, dict) and "reliable" in nested:
-        return reliability_value(nested["reliable"])
-    return reliability_value(entry.get("cot_reliable"))
 
 
 def aggregate(
@@ -563,7 +467,7 @@ def aggregate(
     )
     for entry in entries:
         cot_facets = cot_axis_facets(entry, cot_axis)
-        reliable = entry_reliability(entry)
+        reliable = cot_reliability_flag(entry)
         for cot_facet in cot_facets:
             cot = cot_facet["row_label"]
             for scenario in scenario_labels_for_entry(entry, scenario_axis):
@@ -599,7 +503,7 @@ def aggregate_row_summaries(
         }
     )
     for entry in entries:
-        reliable = entry_reliability(entry)
+        reliable = cot_reliability_flag(entry)
         for cot_facet in cot_axis_facets(entry, cot_axis):
             summary = summaries[cot_facet["row_label"]]
             summary["total"] += 1
@@ -1166,7 +1070,7 @@ def write_html_heatmap(
 
 def main() -> None:
     args = parse_args()
-    entries = load_benchmark(args.benchmark)
+    entries = extract_entries(load_json(args.benchmark))
     if not entries:
         raise ValueError(f"No benchmark entries found in {args.benchmark}")
 

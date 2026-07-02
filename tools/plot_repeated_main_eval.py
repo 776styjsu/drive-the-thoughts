@@ -4,55 +4,38 @@
 
 """Generate the repeated-run main-evaluation F1 figure.
 
-The plot is derived from ``runs/llm_matrix`` so the figure stays aligned with
-the merged run artifacts and Table~\\ref{tab:repeated-main-eval}.
+The plot is derived from the released per-run judge outputs so the figure
+stays aligned with the merged run artifacts and the paper's repeated-main-eval
+table.
 """
 
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import statistics
+import tempfile
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any
 
-os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
+from benchmark_analysis import (
+    BinaryConfusion,
+    Judgment,
+    cot_is_reliable,
+    extract_entries,
+    ground_truth_is_consistent,
+    llm_judgment,
+    load_json,
+    rule_judgment,
+)
+
+os.environ.setdefault("MPLCONFIGDIR", tempfile.mkdtemp(prefix="mpl-"))
 
 import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-
-CONSISTENT_STRINGS = {
-    "consistent",
-    "true",
-    "pass",
-    "passed",
-    "match",
-    "matched",
-    "aligned",
-    "yes",
-}
-INCONSISTENT_STRINGS = {
-    "inconsistent",
-    "contradictory",
-    "invalid_parse",
-    "false",
-    "fail",
-    "failed",
-    "mismatch",
-    "mismatched",
-    "not_consistent",
-    "not consistent",
-    "partial",
-    "partial_consistency",
-    "partially_consistent",
-    "partially consistent",
-    "unaligned",
-    "no",
-}
 
 MODEL_ROWS = (
     ("gpt", "GPT-5.5"),
@@ -67,113 +50,65 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--run-dir",
         type=Path,
-        default=repo_root / "runs" / "llm_matrix",
+        default=repo_root / "data" / "results" / "llm_matrix",
         help="Merged run directory. Default: %(default)s",
     )
     parser.add_argument(
         "--benchmark",
         type=Path,
-        default=repo_root / "benchmark.json",
+        default=repo_root / "data" / "benchmark" / "benchmark.json",
         help="Canonical benchmark JSON. Default: %(default)s",
     )
     parser.add_argument(
         "--rule-result",
         type=Path,
-        default=repo_root / "benchmark.rule_consistency.json",
+        default=repo_root / "data" / "results" / "rule" / "benchmark.rule_consistency.json",
         help="Rule-based consistency output. Default: %(default)s",
     )
     parser.add_argument(
         "--output",
         type=Path,
-        default=repo_root / "SafeVLA" / "figures" / "repeated_main_eval.pdf",
+        default=repo_root / "repeated_main_eval.pdf",
         help="Output figure path. Default: %(default)s",
     )
     return parser.parse_args()
 
 
-def load_json(path: Path) -> Any:
-    with path.open("r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-def _cot_is_reliable(entry: dict[str, Any]) -> bool:
-    nested = entry.get("cot_reliability")
-    if isinstance(nested, dict) and "reliable" in nested:
-        return nested["reliable"] is True
-    value = entry.get("cot_reliable")
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        return value.strip().lower() in {"true", "reliable", "yes", "1"}
-    return False
-
-
 def benchmark_truth(benchmark: Path) -> dict[str, bool]:
-    data = load_json(benchmark)
-    entries = data.get("entries") if isinstance(data, dict) else data
-    if not isinstance(entries, list):
-        raise ValueError("Benchmark must be a JSON list or contain entries")
-    return {
-        entry["clip_id"]: bool(entry["cot_action_consistency"])
-        for entry in entries
-        if isinstance(entry, dict) and entry.get("clip_id") and _cot_is_reliable(entry)
-    }
+    """Map clip_id -> ground-truth consistency over the reliable subset."""
+    truth: dict[str, bool] = {}
+    for entry in extract_entries(load_json(benchmark)):
+        if entry.get("clip_id") and cot_is_reliable(entry):
+            truth[entry["clip_id"]] = ground_truth_is_consistent(entry)
+    return truth
 
 
-def prediction_is_consistent(entry: dict[str, Any]) -> bool:
-    alignment = entry.get("evaluation", {}).get("cot_output_alignment", {})
-    if not isinstance(alignment, dict):
-        alignment = {}
-
-    verdict = alignment.get("verdict")
-    if isinstance(verdict, str):
-        normalized = verdict.strip().lower()
-        if normalized in CONSISTENT_STRINGS:
-            return True
-        if normalized in INCONSISTENT_STRINGS:
-            return False
-
-    score = alignment.get("score", entry.get("score"))
-    if score is None:
-        raise ValueError(f"Missing score/verdict for clip_id={entry.get('clip_id')}")
-    return float(score) > 2
-
-
-def f1_for_result(path: Path, truth: dict[str, bool]) -> float:
-    data = load_json(path)
-    results = data.get("results") if isinstance(data, dict) else data
-    if not isinstance(results, list):
-        raise ValueError(f"Result file has no results list: {path}")
-
-    tp = fp = fn = 0
-    for entry in results:
-        if not isinstance(entry, dict):
-            continue
+def f1_for_result(
+    path: Path,
+    truth: dict[str, bool],
+    judgment: Callable[[dict], Judgment] = llm_judgment,
+) -> float:
+    """F1 (inconsistent positive class) of one result file vs the truth map."""
+    confusion = BinaryConfusion()
+    for entry in extract_entries(load_json(path)):
         clip_id = entry.get("clip_id")
         if clip_id not in truth:
             continue
         try:
-            predicted_consistent = prediction_is_consistent(entry)
+            prediction = judgment(entry)
         except ValueError:
             continue
-        actual_consistent = truth[clip_id]
-        if not actual_consistent and not predicted_consistent:
-            tp += 1
-        elif actual_consistent and not predicted_consistent:
-            fp += 1
-        elif not actual_consistent and predicted_consistent:
-            fn += 1
-
-    precision = tp / (tp + fp) if tp + fp else 0.0
-    recall = tp / (tp + fn) if tp + fn else 0.0
-    return (
-        2 * precision * recall / (precision + recall)
-        if precision + recall
-        else 0.0
-    )
+        confusion.add(
+            actual_is_consistent=truth[clip_id],
+            predicted_is_consistent=prediction.is_consistent,
+        )
+    return confusion.f1
 
 
-def summarize_series(run_dir: Path, truth: dict[str, bool], prefix: str, variant: str) -> tuple[float, float]:
+def summarize_series(
+    run_dir: Path, truth: dict[str, bool], prefix: str, variant: str
+) -> tuple[float, float]:
+    """Mean and stdev of F1 over the repeated runs of one provider/variant."""
     values = [
         f1_for_result(path, truth)
         for path in sorted(run_dir.glob(f"{prefix}.{variant}.run_*.json"))
@@ -183,42 +118,6 @@ def summarize_series(run_dir: Path, truth: dict[str, bool], prefix: str, variant
     mean = sum(values) / len(values)
     sd = statistics.stdev(values) if len(values) > 1 else 0.0
     return mean, sd
-
-
-def rule_f1_for_result(path: Path, truth: dict[str, bool]) -> float:
-    data = load_json(path)
-    results = data.get("results") if isinstance(data, dict) else data
-    if not isinstance(results, list):
-        raise ValueError(f"Rule result file has no results list: {path}")
-
-    tp = fp = fn = 0
-    for entry in results:
-        if not isinstance(entry, dict):
-            continue
-        clip_id = entry.get("clip_id")
-        if clip_id not in truth:
-            continue
-        report = entry.get("report")
-        if not isinstance(report, dict):
-            continue
-        predicted_consistent = prediction_is_consistent(
-            {"evaluation": {"cot_output_alignment": {"verdict": report.get("label")}}}
-        )
-        actual_consistent = truth[clip_id]
-        if not actual_consistent and not predicted_consistent:
-            tp += 1
-        elif actual_consistent and not predicted_consistent:
-            fp += 1
-        elif not actual_consistent and predicted_consistent:
-            fn += 1
-
-    precision = tp / (tp + fp) if tp + fp else 0.0
-    recall = tp / (tp + fn) if tp + fn else 0.0
-    return (
-        2 * precision * recall / (precision + recall)
-        if precision + recall
-        else 0.0
-    )
 
 
 def plot(run_dir: Path, benchmark: Path, rule_result: Path, output: Path) -> None:
@@ -235,7 +134,7 @@ def plot(run_dir: Path, benchmark: Path, rule_result: Path, output: Path) -> Non
         label: summarize_series(run_dir, truth, prefix, "f_llm_map_graph")
         for prefix, label in MODEL_ROWS
     }
-    rule_f1 = rule_f1_for_result(rule_result, truth)
+    rule_f1 = f1_for_result(rule_result, truth, judgment=rule_judgment)
 
     plt.rcParams.update(
         {

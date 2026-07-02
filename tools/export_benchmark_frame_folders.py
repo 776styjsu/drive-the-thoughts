@@ -5,9 +5,11 @@ import json
 import os
 import re
 import shutil
+import tempfile
 from pathlib import Path
 from typing import Any, Dict, List
 
+from benchmark_analysis import extract_entries, load_json
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_FILES = (
@@ -29,8 +31,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--benchmark",
         type=Path,
-        default=REPO_ROOT / "benchmark.json",
-        help="Benchmark JSON to export.",
+        default=REPO_ROOT / "data" / "benchmark" / "benchmark.json",
+        help="Benchmark JSON to export. Default: %(default)s",
     )
     parser.add_argument(
         "--output",
@@ -42,7 +44,7 @@ def parse_args() -> argparse.Namespace:
         "--repo-root",
         type=Path,
         default=REPO_ROOT,
-        help="Repository root used to resolve relative scene_folder values.",
+        help="Root used to resolve relative source_scene_file/scene_folder values.",
     )
     parser.add_argument(
         "--order",
@@ -63,38 +65,44 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_benchmark(path: Path) -> List[Dict[str, Any]]:
-    with path.open() as f:
-        data = json.load(f)
-    if not isinstance(data, list):
-        raise ValueError(f"{path} must contain a JSON list")
-    return data
-
-
 def resolve_frame_dir(entry: Dict[str, Any], benchmark: Path, repo_root: Path) -> Path:
-    clip_id = entry.get("clip_id")
-    scene_folder = entry.get("scene_folder")
-    if not clip_id or not scene_folder:
-        raise ValueError(f"Benchmark entry is missing clip_id or scene_folder: {entry}")
+    """Locate the per-clip frame directory for one benchmark entry.
 
-    scene_path = Path(scene_folder)
-    rel_frame_dir = scene_path / str(clip_id)
-    if rel_frame_dir.is_absolute():
-        candidates = [rel_frame_dir]
-    else:
-        candidates = [
-            repo_root / rel_frame_dir,
-            repo_root / "tutorial_alpamayo" / rel_frame_dir,
-            benchmark.parent / rel_frame_dir,
-            benchmark.parent / "tutorial_alpamayo" / rel_frame_dir,
-        ]
+    Prefers the artifact layout (the directory holding ``source_scene_file``,
+    normally ``data/media/scenes/<clip_id>/``) and falls back to the original
+    workspace layout (``<scene_folder>/<clip_id>/``).
+    """
+    clip_id = entry.get("clip_id")
+    if not clip_id:
+        raise ValueError(f"Benchmark entry is missing clip_id: {entry}")
+
+    candidates = []
+    source_scene_file = entry.get("source_scene_file")
+    if source_scene_file:
+        source_path = Path(source_scene_file)
+        if source_path.is_absolute():
+            candidates.append(source_path.parent)
+        else:
+            candidates.append((repo_root / source_path).parent)
+            candidates.append((benchmark.parent / source_path).parent)
+
+    scene_folder = entry.get("scene_folder")
+    if scene_folder:
+        rel_frame_dir = Path(scene_folder) / str(clip_id)
+        if rel_frame_dir.is_absolute():
+            candidates.append(rel_frame_dir)
+        else:
+            candidates.append(repo_root / rel_frame_dir)
+            candidates.append(benchmark.parent / rel_frame_dir)
 
     for candidate in candidates:
         if candidate.is_dir():
             return candidate.resolve()
 
     formatted = "\n  ".join(str(candidate) for candidate in candidates)
-    raise FileNotFoundError(f"Could not find frame folder for {clip_id}. Tried:\n  {formatted}")
+    raise FileNotFoundError(
+        f"Could not find frame folder for {clip_id}. Tried:\n  {formatted}"
+    )
 
 
 def safe_folder_name(path: Path) -> str:
@@ -113,7 +121,7 @@ def save_trajectory_plot_from_metadata(metadata_path: Path, output_path: Path) -
     if not trajectory_xy:
         return False
 
-    os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
+    os.environ.setdefault("MPLCONFIGDIR", tempfile.mkdtemp(prefix="mpl-"))
     import matplotlib as mpl
 
     mpl.use("Agg")
@@ -182,7 +190,7 @@ def export_entry(
     return {
         "order": index,
         "clip_id": entry["clip_id"],
-        "scene_folder": entry["scene_folder"],
+        "scene_folder": entry.get("scene_folder"),
         "source": str(source),
         "destination": str(dest.resolve()),
         "generated_files": generated_files,
@@ -217,7 +225,7 @@ def main() -> None:
     output = args.output.resolve()
     repo_root = args.repo_root.resolve()
 
-    entries = load_benchmark(benchmark)
+    entries = extract_entries(load_json(benchmark))
     if args.order == "clip_id":
         entries = sorted(entries, key=lambda entry: str(entry.get("clip_id", "")))
 

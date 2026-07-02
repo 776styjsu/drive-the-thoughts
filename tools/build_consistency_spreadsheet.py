@@ -16,26 +16,32 @@ an accuracy file, the raw judge file it references is also loaded (if present)
 to pull judge justifications and trajectory stats.
 
 Examples:
-    python3 tools/build_consistency_spreadsheet.py \
-        --consistency-file benchmark_expanded_100.cot_consistency_gpt55.accuracy.json \
-        --benchmark-file benchmark_expanded_100.json
-
-    # Write an .xlsx instead of .csv (requires openpyxl, e.g. via `uv run`):
     uv run python tools/build_consistency_spreadsheet.py \
-        --consistency-file benchmark_expanded_100.cot_consistency_gpt55.accuracy.json \
-        --benchmark-file benchmark_expanded_100.json \
-        --output benchmark_expanded_100.pairs.xlsx
+        --consistency-file data/results/llm_matrix/gpt.f_llm_map_graph.run_003.json \
+        --benchmark-file data/benchmark/benchmark.json
+
+    # Write an .xlsx instead of .csv (requires the 'xlsx' extra / openpyxl):
+    uv run python tools/build_consistency_spreadsheet.py \
+        --consistency-file data/results/llm_matrix/gpt.f_llm_map_graph.run_003.json \
+        --benchmark-file data/benchmark/benchmark.json \
+        --output pairs.xlsx
 """
 
 import argparse
-import ast
 import csv
-import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
-# Match tools/check_consistency_accuracy.py: score > 2 => consistent.
-LLM_INCONSISTENT_THRESHOLD = 2
+from benchmark_analysis import (
+    clean_cot,
+    cot_reliability_flag,
+    extract_entries,
+    llm_judgment,
+    load_json,
+    reliability_justification,
+    unreliability_taxonomy,
+)
+from benchmark_analysis.judgments import alignment_payload
 
 SIMPLE_COLUMNS = [
     "clip_id",
@@ -47,7 +53,7 @@ SIMPLE_COLUMNS = [
     "cot_reliable",
     "cot_reliability_justification",
     "gt_justification",
-    "judge_justification"
+    "judge_justification",
 ]
 
 COLUMNS = [
@@ -90,28 +96,6 @@ COLUMNS = [
 ]
 
 
-def load_json_file(file_path: Union[str, Path]) -> Union[dict, list]:
-    with Path(file_path).open("r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-def clean_cot(raw: Any) -> str:
-    """Render chain_of_thought (often a stringified Python list) as readable text."""
-    if raw is None:
-        return ""
-    if isinstance(raw, list):
-        return " | ".join(str(x) for x in raw)
-    text = str(raw).strip()
-    if text.startswith("[") and text.endswith("]"):
-        try:
-            parsed = ast.literal_eval(text)
-            if isinstance(parsed, (list, tuple)):
-                return " | ".join(str(x) for x in parsed)
-        except (ValueError, SyntaxError):
-            pass
-    return text
-
-
 def join_list(value: Any) -> str:
     if value is None:
         return ""
@@ -131,53 +115,6 @@ def flatten_unreliability_taxonomy(value: Any) -> str:
     return "; ".join(str(c) for c in categories)
 
 
-def cot_reliability_flag(entry: dict) -> Any:
-    """CoT reliability from a benchmark entry, supporting both on-disk schemas.
-
-    - flat ``cot_reliable`` (bool/str), used by benchmark_expanded_*.json
-    - nested ``cot_reliability.reliable`` (bool), used by benchmark.json
-
-    Returns True/False when a signal is present, else None.
-    """
-    nested = entry.get("cot_reliability")
-    value = (
-        nested.get("reliable")
-        if isinstance(nested, dict) and "reliable" in nested
-        else entry.get("cot_reliable")
-    )
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        text = value.strip().lower()
-        if text in {"true", "reliable", "yes", "1"}:
-            return True
-        if text in {"false", "unreliable", "no", "0"}:
-            return False
-    return None
-
-
-def reliability_justification(entry: dict) -> Any:
-    """Reliability justification from either schema (flat or nested)."""
-    nested = entry.get("cot_reliability")
-    if isinstance(nested, dict) and nested.get("justification") is not None:
-        return nested.get("justification")
-    return entry.get("cot_reliability_justification")
-
-
-def unreliability_taxonomy(entry: dict) -> Any:
-    """Taxonomy value (renderable by ``flatten_unreliability_taxonomy``) from either schema."""
-    nested = entry.get("cot_reliability")
-    if isinstance(nested, dict) and (
-        nested.get("unreliability_categories")
-        or nested.get("primary_unreliability_category")
-    ):
-        return {
-            "categories": nested.get("unreliability_categories") or [],
-            "primary_category": nested.get("primary_unreliability_category"),
-        }
-    return entry.get("cot_unreliability_taxonomy")
-
-
 def flatten_inconsistency_subtypes(value: Any) -> str:
     """Render the subtype dict as the subtypes marked present, e.g. 'magnitude_mismatch'."""
     if not isinstance(value, dict):
@@ -190,9 +127,9 @@ def flatten_inconsistency_subtypes(value: Any) -> str:
     return "; ".join(sorted(present))
 
 
-def index_predictions(consistency_data: dict) -> Dict[str, dict]:
+def index_predictions(consistency_data: dict) -> dict[str, dict]:
     """Map clip_id -> prediction record from an accuracy file's matches/mismatches."""
-    predictions: Dict[str, dict] = {}
+    predictions: dict[str, dict] = {}
     for group, correct in (("matches", True), ("mismatches", False)):
         for entry in consistency_data.get(group, []):
             clip_id = entry.get("clip_id")
@@ -201,9 +138,9 @@ def index_predictions(consistency_data: dict) -> Dict[str, dict]:
     return predictions
 
 
-def index_judge_results(judge_data: dict) -> Dict[str, dict]:
+def index_judge_results(judge_data: dict) -> dict[str, dict]:
     """Map clip_id -> raw judge result (justification, trajectory stats, score)."""
-    results: Dict[str, dict] = {}
+    results: dict[str, dict] = {}
     for entry in judge_data.get("results", []):
         clip_id = entry.get("clip_id")
         if clip_id:
@@ -211,25 +148,26 @@ def index_judge_results(judge_data: dict) -> Dict[str, dict]:
     return results
 
 
-def predictions_from_judge(judge_results: Dict[str, dict]) -> Dict[str, dict]:
+def predictions_from_judge(judge_results: dict[str, dict]) -> dict[str, dict]:
     """Derive prediction records from a raw judge file when no accuracy file is given."""
-    predictions: Dict[str, dict] = {}
+    predictions: dict[str, dict] = {}
     for clip_id, entry in judge_results.items():
-        evaluation = entry.get("evaluation", {}).get("cot_output_alignment", {})
-        score = evaluation.get("score")
-        if score is None:
+        try:
+            judgment = llm_judgment(entry)
+        except ValueError:
             continue
         predictions[clip_id] = {
             "clip_id": clip_id,
-            "predicted_is_consistent": score > LLM_INCONSISTENT_THRESHOLD,
-            "prediction_score": score,
+            "predicted_is_consistent": judgment.is_consistent,
+            # Keep the raw on-disk score (int stays int in the spreadsheet).
+            "prediction_score": alignment_payload(entry).get("score", judgment.score),
         }
     return predictions
 
 
 def resolve_referenced_judge_file(
-    accuracy_path: Path, referenced: Optional[str]
-) -> Optional[Path]:
+    accuracy_path: Path, referenced: str | None
+) -> Path | None:
     if not referenced:
         return None
     candidates = [Path(referenced), accuracy_path.parent / referenced]
@@ -240,10 +178,10 @@ def resolve_referenced_judge_file(
 
 
 def build_rows(
-    benchmark_entries: List[dict],
-    predictions: Dict[str, dict],
-    judge_results: Dict[str, dict],
-) -> List[Dict[str, Any]]:
+    benchmark_entries: list[dict],
+    predictions: dict[str, dict],
+    judge_results: dict[str, dict],
+) -> list[dict[str, Any]]:
     rows = []
     for entry in benchmark_entries:
         clip_id = entry.get("clip_id", "")
@@ -322,7 +260,7 @@ def build_rows(
 
 
 def write_csv(
-    rows: List[Dict[str, Any]], output_path: Path, columns: List[str]
+    rows: list[dict[str, Any]], output_path: Path, columns: list[str]
 ) -> None:
     with output_path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=columns, extrasaction="ignore")
@@ -331,7 +269,7 @@ def write_csv(
 
 
 def write_xlsx(
-    rows: List[Dict[str, Any]], output_path: Path, columns: List[str]
+    rows: list[dict[str, Any]], output_path: Path, columns: list[str]
 ) -> None:
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill
@@ -370,7 +308,9 @@ def write_xlsx(
         "rollout_mp4",
     }
     for idx, col in enumerate(columns, start=1):
-        ws.column_dimensions[get_column_letter(idx)].width = 60 if col in wide_columns else 18
+        ws.column_dimensions[get_column_letter(idx)].width = (
+            60 if col in wide_columns else 18
+        )
 
     ws.freeze_panes = "B2"
     ws.auto_filter.ref = ws.dimensions
@@ -409,20 +349,17 @@ def main() -> None:
     args = parser.parse_args()
     columns = COLUMNS if args.full else SIMPLE_COLUMNS
 
-    consistency_data = load_json_file(args.consistency_file)
-    benchmark_data = load_json_file(args.benchmark_file)
-    benchmark_entries = (
-        benchmark_data if isinstance(benchmark_data, list) else benchmark_data.get("results", [])
-    )
+    consistency_data = load_json(args.consistency_file)
+    benchmark_entries = extract_entries(load_json(args.benchmark_file))
 
-    judge_results: Dict[str, dict] = {}
+    judge_results: dict[str, dict] = {}
     if isinstance(consistency_data, dict) and "matches" in consistency_data:
         predictions = index_predictions(consistency_data)
         judge_path = resolve_referenced_judge_file(
             args.consistency_file, consistency_data.get("consistency_file")
         )
         if judge_path is not None:
-            judge_results = index_judge_results(load_json_file(judge_path))
+            judge_results = index_judge_results(load_json(judge_path))
             print(f"Loaded judge justifications from {judge_path}")
         else:
             print(

@@ -31,15 +31,15 @@ set -euo pipefail
 DEFAULT_REPO_ROOT="${SLURM_SUBMIT_DIR:-$(pwd)}"
 if [[ ! -f "${DEFAULT_REPO_ROOT}/tools/run_benchmark_llm_matrix.py" ]]; then
   echo "Could not infer repository root from SLURM_SUBMIT_DIR=${SLURM_SUBMIT_DIR:-<unset>}." >&2
-  echo "Submit from the repository root or pass REPO_ROOT=/path/to/alpasim." >&2
+  echo "Submit from the repository root or pass REPO_ROOT=/path/to/drive-the-thoughts." >&2
   exit 1
 fi
 
 # ---------- Config (override via sbatch --export=ALL,NAME=value,...) ----------
 REPO_ROOT="${REPO_ROOT:-$DEFAULT_REPO_ROOT}"
-BENCHMARK_JSON="${BENCHMARK_JSON:-benchmark.json}"
+BENCHMARK_JSON="${BENCHMARK_JSON:-data/benchmark/benchmark.json}"
 BENCHMARK_SOURCE_ROOT="${BENCHMARK_SOURCE_ROOT:-$REPO_ROOT}"
-LIVE_DIR="${LIVE_DIR:-runs/llm_matrix}"
+LIVE_DIR="${LIVE_DIR:-data/results/llm_matrix}"
 
 RUN_ID="${RUN_ID:-llm_matrix_update_${SLURM_JOB_ID:-$(date +%Y%m%d_%H%M%S)}}"
 STAGE_DIR="${STAGE_DIR:-runs/${RUN_ID}}"
@@ -141,7 +141,9 @@ UV_CACHE_DIR="${UV_CACHE_DIR:-$REPO_ROOT/.uv-cache}"
 HF_HOME="${HF_HOME:-$REPO_ROOT/.hf-cache}"
 export UV_CACHE_DIR HF_HOME
 
-if [[ "$SETUP_ENV" == "1" ]]; then
+if [[ "$SETUP_ENV" == "1" && -f "$REPO_ROOT/setup_local_env.sh" ]]; then
+  # Present only in the full AlpaSim workspace; the artifact root has no
+  # setup_local_env.sh and relies on uv sync instead.
   # shellcheck disable=SC1091
   source "$REPO_ROOT/setup_local_env.sh"
 fi
@@ -268,7 +270,7 @@ if [[ "$RUN_QWEN35" == "1" ]]; then
     echo "[$(date)] Starting qwen35 vLLM server"
     mkdir -p "$(dirname "$QWEN35_SERVER_LOG")"
     QWEN35_PORT="$QWEN35_PORT" QWEN35_HOST="$QWEN35_HOST" \
-      tools/serve_qwen35_4b_fp8_vllm.sh serve \
+      tools/serve_qwen_vllm.sh qwen35 serve \
         --gpu-memory-utilization "$QWEN35_GPU_MEMORY_UTILIZATION" \
         >"$QWEN35_SERVER_LOG" 2>&1 &
     QWEN35_PID=$!

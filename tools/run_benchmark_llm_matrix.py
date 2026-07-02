@@ -24,6 +24,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+from benchmark_analysis import cot_reliability_flag, extract_entries, load_json
+
 
 PROVIDERS: tuple[tuple[str, str], ...] = (
     ("qwen", "qwen35_4b_fp8"),
@@ -55,7 +57,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--benchmark-json",
         type=Path,
-        default=repo_root / "benchmark.json",
+        default=repo_root / "data" / "benchmark" / "benchmark.json",
         help="Input benchmark JSON. Default: %(default)s",
     )
     parser.add_argument(
@@ -79,8 +81,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=repo_root / "benchmark_llm_matrix",
-        help="Directory for subset, outputs, logs, and manifest. Default: %(default)s",
+        default=repo_root / "runs" / "llm_matrix",
+        help=(
+            "Directory for subset, outputs, logs, and manifest (kept separate "
+            "from the released data/results). Default: %(default)s"
+        ),
     )
     parser.add_argument(
         "--benchmark-source-root",
@@ -183,48 +188,13 @@ def parse_args() -> argparse.Namespace:
 
 
 def _load_benchmark_items(path: Path) -> tuple[object, list[dict]]:
-    with path.open("r", encoding="utf-8") as f:
-        payload = json.load(f)
-
-    if isinstance(payload, dict):
-        items = payload.get("results", payload.get("entries", []))
-    else:
-        items = payload
-    if not isinstance(items, list):
-        raise ValueError(f"Expected benchmark JSON list or results/entries list: {path}")
-    return payload, [item for item in items if isinstance(item, dict)]
-
-
-def _cot_reliability_flag(item: dict | None) -> bool | None:
-    """CoT reliability from a benchmark entry, supporting both on-disk schemas.
-
-    - flat ``cot_reliable`` (bool/str), used by benchmark_expanded_*.json
-    - nested ``cot_reliability.reliable`` (bool), used by benchmark.json
-
-    Returns True/False when a signal is present, else None (caller's default).
-    """
-    if not isinstance(item, dict):
-        return None
-    nested = item.get("cot_reliability")
-    value = (
-        nested.get("reliable")
-        if isinstance(nested, dict) and "reliable" in nested
-        else item.get("cot_reliable")
-    )
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        text = value.strip().lower()
-        if text in {"true", "reliable", "yes", "1"}:
-            return True
-        if text in {"false", "unreliable", "no", "0"}:
-            return False
-    return None
+    payload = load_json(path)
+    return payload, extract_entries(payload)
 
 
 def _cot_is_reliable(item: dict) -> bool:
     # Absent/unknown reliability is treated as reliable (do not drop the entry).
-    return _cot_reliability_flag(item) is not False
+    return cot_reliability_flag(item) is not False
 
 
 def _write_subset(

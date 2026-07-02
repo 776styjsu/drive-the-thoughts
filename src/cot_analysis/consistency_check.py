@@ -14,20 +14,20 @@ This is the rule-based counterpart to the LLM-judge pipeline in
 
 Usage::
 
-    # Score every clip under an extracted_frames directory:
-    uv run python -m cot_analysis.consistency_check tutorial_alpamayo15_first20/extracted_frames
-
     # Score only the clips selected by a benchmark JSON (resolves each entry's
     # source_scene_file to its metadata.json):
     uv run python -m cot_analysis.consistency_check \
-        --benchmark_json benchmark_expanded_100.json \
-        --output benchmark_expanded_100.rule_consistency.json
+        --benchmark_json data/benchmark/benchmark.json \
+        --output benchmark.rule_consistency.json
+
+    # Score every clip under an extracted-frames directory:
+    uv run python -m cot_analysis.consistency_check data/media/scenes
 
     # Exact-label variant (no direction families; gentle_decelerate only matches
     # gentle_decelerate). Defaults the output to
-    # benchmark_expanded_100.rule_consistency.exact.json:
+    # benchmark.rule_consistency.exact.json:
     uv run python -m cot_analysis.consistency_check \
-        --benchmark_json benchmark_expanded_100.json --match-mode exact
+        --benchmark_json data/benchmark/benchmark.json --match-mode exact
 """
 
 from __future__ import annotations
@@ -46,11 +46,9 @@ from alpasim_utils.consistency import (
 )
 from alpasim_utils.meta_actions_types import MetaActionThresholds
 from alpasim_utils.trajectory_additional_info import build_additional_info
+from benchmark_analysis import extract_entries, load_json
 
-try:
-    from .__main__ import _resolve_benchmark_source_path
-except ImportError:  # pragma: no cover - fallback when run as a loose script
-    from cot_analysis.__main__ import _resolve_benchmark_source_path
+from .benchmark_source import resolve_benchmark_source_path
 
 
 METADATA_FILENAME = "metadata.json"
@@ -302,19 +300,6 @@ def run(
     return aggregate
 
 
-def _load_benchmark_items(benchmark_json: Path) -> list[dict]:
-    """Load benchmark entries from a list or a {results|entries: [...]} object."""
-    with benchmark_json.open("r", encoding="utf-8") as f:
-        benchmark = json.load(f)
-    if isinstance(benchmark, dict):
-        items = benchmark.get("results", benchmark.get("entries", []))
-    else:
-        items = benchmark
-    if not isinstance(items, list):
-        raise ValueError(f"Expected a benchmark list or results/entries list: {benchmark_json}")
-    return [item for item in items if isinstance(item, dict)]
-
-
 def _process_benchmark_item(
     item: dict,
     benchmark_json: Path,
@@ -327,7 +312,7 @@ def _process_benchmark_item(
     """Resolve one benchmark entry to its metadata.json and score that clip."""
     clip_id = str(item.get("clip_id", "")).strip()
     source_scene_file = item.get("source_scene_file")
-    metadata_path = _resolve_benchmark_source_path(
+    metadata_path = resolve_benchmark_source_path(
         source_scene_file, benchmark_json, source_root
     )
     if metadata_path is None:
@@ -374,7 +359,7 @@ def run_benchmark(
     if not benchmark_json.exists():
         raise FileNotFoundError(f"Benchmark file does not exist: {benchmark_json}")
 
-    items = _load_benchmark_items(benchmark_json)
+    items = extract_entries(load_json(benchmark_json))
     results = [
         _process_benchmark_item(
             item,

@@ -5,329 +5,38 @@
 """Compare CoT consistency judgments against a benchmark file.
 
 Examples:
-    python tools/check_consistency_accuracy.py \
-        --consistency-file benchmark_expanded_50.cot_consistency.json \
-        --benchmark-file benchmark_expanded_50.json \
-        --consistency-type cot_output_alignment
+    uv run python tools/check_consistency_accuracy.py \
+        --consistency-file data/results/llm_matrix/gpt.f_llm_map_graph.run_003.json \
+        --benchmark-file data/benchmark/benchmark.json \
+        --reliable-only
 
-    python tools/check_consistency_accuracy.py \
-        --consistency-file cot_consistency_report.json \
-        --benchmark-file benchmark_expanded_50.json \
-        --consistency-type alpasim_cot_consistency_report
+    uv run python tools/check_consistency_accuracy.py \
+        --consistency-file data/results/rule/benchmark.rule_consistency.json \
+        --benchmark-file data/benchmark/benchmark.json \
+        --consistency-type alpasim_cot_consistency_report \
+        --reliable-only
 """
 
 import argparse
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
 
-
-COT_OUTPUT_ALIGNMENT = "cot_output_alignment"
-ALPASIM_COT_CONSISTENCY = "alpasim_cot_consistency"
-ALPASIM_COT_CONSISTENCY_REPORT = "alpasim_cot_consistency_report"
-RULE_BASED_ALIASES = {
-    ALPASIM_COT_CONSISTENCY,
-    ALPASIM_COT_CONSISTENCY_REPORT,
-    "rule_based",
-}
-SUPPORTED_CONSISTENCY_TYPES = (
-    COT_OUTPUT_ALIGNMENT,
-    ALPASIM_COT_CONSISTENCY,
-    ALPASIM_COT_CONSISTENCY_REPORT,
-    "rule_based",
+from benchmark_analysis import (
+    CONSISTENCY_TYPES,
+    DEFAULT_SCORE_THRESHOLD,
+    BinaryConfusion,
+    classification_metrics,
+    cot_is_reliable,
+    extract_entries,
+    ground_truth_is_consistent,
+    index_by_clip_id,
+    judgment_for,
+    load_json,
 )
-
-# Rule-based label emitted when the CoT yields no parseable ego intent. These
-# are parse failures rather than genuine consistency judgments, so they can be
-# excluded from accuracy via --valid-parse-only.
-INVALID_PARSE_LABEL = "invalid_parse"
-
-CONSISTENT_STRINGS = {
-    "consistent",
-    "true",
-    "pass",
-    "passed",
-    "match",
-    "matched",
-    "aligned",
-    "yes",
-}
-INCONSISTENT_STRINGS = {
-    "inconsistent",
-    "contradictory",
-    "invalid_parse",
-    "false",
-    "fail",
-    "failed",
-    "mismatch",
-    "mismatched",
-    "not_consistent",
-    "not consistent",
-    "partial",
-    "partial_consistency",
-    "partially_consistent",
-    "partially consistent",
-    "unaligned",
-    "no",
-}
-
-
-def load_json_file(file_path: Union[str, Path]) -> Union[dict, list]:
-    """Load a JSON file and return its contents."""
-    with Path(file_path).open("r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-def extract_entries(data: Union[dict, list]) -> List[dict]:
-    """Extract per-clip entries from common consistency or benchmark shapes."""
-    if isinstance(data, list):
-        return [entry for entry in data if isinstance(entry, dict)]
-
-    if not isinstance(data, dict):
-        raise ValueError("Expected a JSON object or list")
-
-    if data.get("clip_id"):
-        return [data]
-
-    for key in ("results", "entries"):
-        entries = data.get(key)
-        if isinstance(entries, list):
-            return [entry for entry in entries if isinstance(entry, dict)]
-
-    raise ValueError("Unrecognized JSON format; expected clip_id, results, or entries")
-
-
-def filter_empty_benchmark_entries(benchmark_entries: List[dict]) -> List[dict]:
-    """Remove benchmark entries without a usable clip_id."""
-    return [
-        entry
-        for entry in benchmark_entries
-        if str(entry.get("clip_id", "")).strip()
-    ]
-
-
-def cot_reliability_flag(item: Optional[dict]) -> Optional[bool]:
-    """CoT reliability from a benchmark entry, supporting both on-disk schemas.
-
-    - flat ``cot_reliable`` (bool/str), used by benchmark_expanded_*.json
-    - nested ``cot_reliability.reliable`` (bool), used by benchmark.json
-
-    Returns True/False when a signal is present, else None (caller's default).
-    """
-    if not isinstance(item, dict):
-        return None
-    nested = item.get("cot_reliability")
-    value = (
-        nested.get("reliable")
-        if isinstance(nested, dict) and "reliable" in nested
-        else item.get("cot_reliable")
-    )
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        text = value.strip().lower()
-        if text in {"true", "reliable", "yes", "1"}:
-            return True
-        if text in {"false", "unreliable", "no", "0"}:
-            return False
-    return None
-
-
-def _to_float(value: Any) -> Optional[float]:
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _bool_from_value(value: Any) -> Optional[bool]:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)):
-        return value > 0
-    if isinstance(value, str):
-        normalized = value.strip().lower()
-        if normalized in CONSISTENT_STRINGS:
-            return True
-        if normalized in INCONSISTENT_STRINGS:
-            return False
-    return None
 
 
 def _label_from_bool(is_consistent: bool) -> str:
     return "consistent" if is_consistent else "inconsistent"
-
-
-def _benchmark_is_consistent(entry: dict) -> bool:
-    """Read the benchmark ground-truth consistency label."""
-    for key in ("cot_action_consistency", "is_consistent", "consistent"):
-        if key in entry:
-            parsed = _bool_from_value(entry[key])
-            if parsed is not None:
-                return parsed
-
-    for key in ("label", "result"):
-        if key in entry:
-            parsed = _bool_from_value(entry[key])
-            if parsed is not None:
-                return parsed
-
-    raise ValueError(f"Benchmark entry has no consistency label: {entry.get('clip_id')}")
-
-
-def _extract_cot_output_alignment(entry: dict, score_threshold: float = 2) -> dict:
-    alignment = entry.get(COT_OUTPUT_ALIGNMENT)
-    if not isinstance(alignment, dict):
-        alignment = entry.get("evaluation", {}).get(COT_OUTPUT_ALIGNMENT, {})
-    if not isinstance(alignment, dict):
-        alignment = {}
-
-    justification = alignment.get("justification", entry.get("justification", ""))
-
-    # Verdict schema (detector prompt): {"verdict": "consistent" | "inconsistent"}.
-    is_consistent = _bool_from_value(alignment.get("verdict"))
-    if is_consistent is not None:
-        return {
-            "is_consistent": is_consistent,
-            "label": _label_from_bool(is_consistent),
-            "score": _to_float(alignment.get("score")),
-            "category": alignment.get("inconsistency_type")
-            or alignment.get("category", entry.get("category", "")),
-            "justification": justification,
-            "valid_parse": True,
-        }
-
-    # Graded schema: {"score": 1-5}, consistent when score > threshold.
-    score = _to_float(alignment.get("score"))
-    if score is None:
-        score = _to_float(entry.get("score"))
-    if score is None:
-        raise ValueError(
-            f"Missing cot_output_alignment verdict/score for "
-            f"clip_id={entry.get('clip_id')}"
-        )
-
-    is_consistent = score > score_threshold
-    return {
-        "is_consistent": is_consistent,
-        "label": _label_from_bool(is_consistent),
-        "score": score,
-        "category": alignment.get("inconsistency_type")
-        or alignment.get("category", entry.get("category", "")),
-        "justification": justification,
-        "valid_parse": True,
-    }
-
-
-def _extract_rule_based_consistency(entry: dict) -> dict:
-    report = entry.get("report") if isinstance(entry.get("report"), dict) else entry
-
-    label = report.get("label")
-    result = report.get("result")
-    score = _to_float(report.get("score"))
-
-    is_consistent = _bool_from_value(label)
-    if is_consistent is None:
-        is_consistent = _bool_from_value(result)
-    if is_consistent is None and score is not None:
-        is_consistent = score > 0
-    if is_consistent is None:
-        raise ValueError(
-            f"Missing rule-based result/label/score for clip_id={entry.get('clip_id')}"
-        )
-
-    raw_label = str(label or result or "").strip().lower()
-    return {
-        "is_consistent": is_consistent,
-        "label": label or result or _label_from_bool(is_consistent),
-        "score": score,
-        "category": label or result or "",
-        "justification": "",
-        "valid_parse": raw_label != INVALID_PARSE_LABEL,
-    }
-
-
-def get_consistency_judgment(
-    entry: dict, consistency_type: str, score_threshold: float = 2
-) -> dict:
-    """Extract a normalized predicted consistency judgment from one entry."""
-    if consistency_type == COT_OUTPUT_ALIGNMENT:
-        return _extract_cot_output_alignment(entry, score_threshold)
-    if consistency_type in RULE_BASED_ALIASES:
-        return _extract_rule_based_consistency(entry)
-    raise ValueError(f"Unsupported consistency type: {consistency_type}")
-
-
-def _empty_confusion_matrix() -> dict:
-    return {
-        "actual_consistent": {
-            "predicted_consistent": 0,
-            "predicted_inconsistent": 0,
-        },
-        "actual_inconsistent": {
-            "predicted_consistent": 0,
-            "predicted_inconsistent": 0,
-        },
-    }
-
-
-def _add_to_confusion_matrix(
-    confusion_matrix: dict,
-    *,
-    benchmark_is_consistent: bool,
-    predicted_is_consistent: bool,
-) -> None:
-    actual_key = (
-        "actual_consistent"
-        if benchmark_is_consistent
-        else "actual_inconsistent"
-    )
-    predicted_key = (
-        "predicted_consistent"
-        if predicted_is_consistent
-        else "predicted_inconsistent"
-    )
-    confusion_matrix[actual_key][predicted_key] += 1
-
-
-def _classification_metrics(confusion_matrix: dict) -> dict:
-    """Compute precision/recall/F1, balanced accuracy, and Cohen's kappa.
-
-    "inconsistent" is treated as the positive class (the detection target);
-    consistent-class precision/recall/F1 are also reported.
-    """
-    tp = confusion_matrix["actual_inconsistent"]["predicted_inconsistent"]
-    fp = confusion_matrix["actual_consistent"]["predicted_inconsistent"]
-    tn = confusion_matrix["actual_consistent"]["predicted_consistent"]
-    fn = confusion_matrix["actual_inconsistent"]["predicted_consistent"]
-    total = tp + fp + tn + fn
-
-    def _safe_div(num: float, den: float) -> float:
-        return num / den if den else 0.0
-
-    def _prf(tp_: int, fp_: int, fn_: int) -> dict:
-        precision = _safe_div(tp_, tp_ + fp_)
-        recall = _safe_div(tp_, tp_ + fn_)
-        f1 = _safe_div(2 * precision * recall, precision + recall)
-        return {"precision": precision, "recall": recall, "f1": f1}
-
-    recall_inconsistent = _safe_div(tp, tp + fn)
-    recall_consistent = _safe_div(tn, tn + fp)
-    balanced_accuracy = (recall_inconsistent + recall_consistent) / 2
-
-    observed_agreement = _safe_div(tp + tn, total)
-    expected_agreement = _safe_div(
-        (tp + fp) * (tp + fn) + (tn + fn) * (tn + fp), total * total
-    )
-    kappa = _safe_div(observed_agreement - expected_agreement, 1 - expected_agreement)
-
-    return {
-        "positive_class": "inconsistent",
-        "inconsistent": _prf(tp, fp, fn),
-        "consistent": _prf(tn, fn, fp),
-        "balanced_accuracy": balanced_accuracy,
-        "cohens_kappa": kappa,
-    }
 
 
 def _disagreement_type(
@@ -343,10 +52,10 @@ def _disagreement_type(
 
 
 def compare_judgments(
-    consistency_entries: List[dict],
-    benchmark_map: Dict[str, dict],
+    consistency_entries: list[dict],
+    benchmark_map: dict[str, dict],
     consistency_type: str,
-    score_threshold: float = 2,
+    score_threshold: float = DEFAULT_SCORE_THRESHOLD,
     valid_parse_only: bool = False,
 ) -> dict:
     """Compare predicted consistency judgments against benchmark labels.
@@ -355,7 +64,7 @@ def compare_judgments(
     parse (label ``invalid_parse``) are skipped rather than counted, so accuracy
     reflects only clips the deterministic parser could actually judge.
     """
-    confusion_matrix = _empty_confusion_matrix()
+    confusion = BinaryConfusion()
     matches = []
     mismatches = []
     skipped = []
@@ -370,66 +79,57 @@ def compare_judgments(
             continue
 
         try:
-            prediction = get_consistency_judgment(
-                entry, consistency_type, score_threshold
+            prediction = judgment_for(entry, consistency_type, score_threshold)
+            benchmark_is_consistent = ground_truth_is_consistent(
+                benchmark_map[clip_id]
             )
-            benchmark_is_consistent = _benchmark_is_consistent(benchmark_map[clip_id])
         except ValueError as exc:
             skipped.append({"clip_id": clip_id, "reason": str(exc)})
             continue
 
-        if valid_parse_only and not prediction.get("valid_parse", True):
+        if valid_parse_only and not prediction.valid_parse:
             skipped.append(
                 {"clip_id": clip_id, "reason": "invalid_parse (valid-parse-only)"}
             )
             continue
 
-        predicted_is_consistent = prediction["is_consistent"]
-        _add_to_confusion_matrix(
-            confusion_matrix,
-            benchmark_is_consistent=benchmark_is_consistent,
-            predicted_is_consistent=predicted_is_consistent,
+        confusion.add(
+            actual_is_consistent=benchmark_is_consistent,
+            predicted_is_consistent=prediction.is_consistent,
         )
 
         comparison = {
             "clip_id": clip_id,
-            "predicted_is_consistent": predicted_is_consistent,
-            "predicted_label": prediction["label"],
-            "prediction_score": prediction["score"],
-            "prediction_category": prediction["category"],
+            "predicted_is_consistent": prediction.is_consistent,
+            "predicted_label": prediction.label,
+            "prediction_score": prediction.score,
+            "prediction_category": prediction.category,
             "benchmark_is_consistent": benchmark_is_consistent,
             "benchmark_label": _label_from_bool(benchmark_is_consistent),
             "disagreement_type": _disagreement_type(
                 benchmark_is_consistent=benchmark_is_consistent,
-                predicted_is_consistent=predicted_is_consistent,
+                predicted_is_consistent=prediction.is_consistent,
             ),
         }
 
-        if predicted_is_consistent == benchmark_is_consistent:
+        if prediction.is_consistent == benchmark_is_consistent:
             matches.append(comparison)
         else:
             mismatches.append(comparison)
 
-    total = len(matches) + len(mismatches)
-    correct_consistent = confusion_matrix["actual_consistent"]["predicted_consistent"]
-    correct_inconsistent = confusion_matrix["actual_inconsistent"][
-        "predicted_inconsistent"
-    ]
-    accuracy = (correct_consistent + correct_inconsistent) / total if total else 0.0
-
     return {
         "summary": {
-            "total_matched": total,
-            "correct": correct_consistent + correct_inconsistent,
-            "correct_consistent": correct_consistent,
-            "correct_inconsistent": correct_inconsistent,
+            "total_matched": confusion.total,
+            "correct": confusion.correct,
+            "correct_consistent": confusion.true_negative,
+            "correct_inconsistent": confusion.true_positive,
             "mismatches": len(mismatches),
             "skipped": len(skipped),
-            "accuracy": accuracy,
-            "accuracy_percent": 100 * accuracy,
+            "accuracy": confusion.accuracy,
+            "accuracy_percent": 100 * confusion.accuracy,
         },
-        "metrics": _classification_metrics(confusion_matrix),
-        "confusion_matrix": confusion_matrix,
+        "metrics": classification_metrics(confusion),
+        "confusion_matrix": confusion.to_nested_dict(),
         "matches": matches,
         "mismatches": mismatches,
         "skipped": skipped,
@@ -520,22 +220,17 @@ def build_report(
     consistency_file: Path,
     benchmark_file: Path,
     consistency_type: str,
-    score_threshold: float = 2,
+    score_threshold: float = DEFAULT_SCORE_THRESHOLD,
     reliable_only: bool = False,
     valid_parse_only: bool = False,
 ) -> dict:
-    consistency_data = load_json_file(consistency_file)
-    benchmark_data = load_json_file(benchmark_file)
-
-    consistency_entries = extract_entries(consistency_data)
-    benchmark_entries = filter_empty_benchmark_entries(extract_entries(benchmark_data))
+    consistency_entries = extract_entries(load_json(consistency_file))
+    benchmark_entries = extract_entries(load_json(benchmark_file))
     if reliable_only:
         benchmark_entries = [
-            entry
-            for entry in benchmark_entries
-            if cot_reliability_flag(entry) is True
+            entry for entry in benchmark_entries if cot_is_reliable(entry)
         ]
-    benchmark_map = {entry["clip_id"]: entry for entry in benchmark_entries}
+    benchmark_map = index_by_clip_id(benchmark_entries)
 
     report = compare_judgments(
         consistency_entries,
@@ -571,8 +266,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--consistency-type",
-        choices=SUPPORTED_CONSISTENCY_TYPES,
-        default=COT_OUTPUT_ALIGNMENT,
+        choices=CONSISTENCY_TYPES,
+        default="cot_output_alignment",
         help=(
             "How to classify predictions. cot_output_alignment uses the "
             "verdict field if present, else score > 2 as consistent; "
@@ -583,10 +278,10 @@ def main() -> None:
     parser.add_argument(
         "--score-threshold",
         type=float,
-        default=2,
+        default=DEFAULT_SCORE_THRESHOLD,
         help=(
             "LLM score cutoff for cot_output_alignment: score <= threshold is "
-            "classified inconsistent (default: 2)."
+            "classified inconsistent (default: %(default)s)."
         ),
     )
     parser.add_argument(

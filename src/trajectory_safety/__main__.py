@@ -13,11 +13,11 @@ monitor predicts that outcome — and where the two signals are complementary.
 
 Usage (from repo root)::
 
-    PYTHONPATH=src/tools uv run python -m trajectory_safety \\
-        --benchmark_json benchmark_expanded_100.json \\
-        --monitor_json benchmark_expanded_100.cot_consistency_map_graph_gpt55.json \\
-        --output benchmark_expanded_100.downstream_safety.json \\
-        --csv benchmark_expanded_100.downstream_safety.csv
+    uv run python -m trajectory_safety \\
+        --benchmark_json data/benchmark/benchmark.json \\
+        --monitor_json data/results/llm_matrix/gpt.f_llm_map_graph.run_001.json \\
+        --output downstream_safety.json \\
+        --csv downstream_safety.csv
 
 ``--monitor_json`` is optional; without it the tool just reports simulated
 outcomes vs. the human safety labels.
@@ -31,6 +31,8 @@ import json
 import sys
 from pathlib import Path
 
+from benchmark_analysis import cot_reliability_flag, extract_entries, load_json
+
 from trajectory_safety.outcomes import (
     compute_outcome,
     load_planned_trajectory,
@@ -38,45 +40,16 @@ from trajectory_safety.outcomes import (
 )
 
 
-def _cot_reliability_flag(item: dict | None) -> bool | None:
-    """CoT reliability from a benchmark entry, supporting both on-disk schemas.
-
-    - flat ``cot_reliable`` (bool/str), used by benchmark_expanded_*.json
-    - nested ``cot_reliability.reliable`` (bool), used by benchmark.json
-
-    Returns True/False when a signal is present, else None (caller's default).
-    """
-    if not isinstance(item, dict):
-        return None
-    nested = item.get("cot_reliability")
-    value = (
-        nested.get("reliable")
-        if isinstance(nested, dict) and "reliable" in nested
-        else item.get("cot_reliable")
-    )
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        text = value.strip().lower()
-        if text in {"true", "reliable", "yes", "1"}:
-            return True
-        if text in {"false", "unreliable", "no", "0"}:
-            return False
-    return None
-
-
 def _resolve_scene_dir(source_scene_file: str, scene_roots: list[Path]) -> Path | None:
     """Locate the per-frame directory that holds metadata + geometry JSON.
 
     ``source_scene_file`` is a path to ``metadata.json``; the geometry lives
-    next to it. Different exports store the tree at the repo root or under a
-    ``tutorial_alpamayo/`` prefix, so we try a few roots.
+    next to it.
     """
     rel = Path(source_scene_file)
     candidates = [rel] if rel.is_absolute() else []
     for root in scene_roots:
         candidates.append(root / rel)
-        candidates.append(root / "tutorial_alpamayo" / rel)
     for cand in candidates:
         if cand.exists():
             return cand.parent
@@ -141,13 +114,13 @@ def _fmt_confusion(title: str, rows: list[dict], pred_key: str, pos_label: str) 
 
 def run(args: argparse.Namespace) -> int:
     scene_roots = [Path(args.scene_root).resolve()]
-    bench = json.loads(Path(args.benchmark_json).read_text())
+    bench = extract_entries(load_json(args.benchmark_json))
     monitor = _monitor_index(Path(args.monitor_json)) if args.monitor_json else {}
 
     rows: list[dict] = []
     skipped: list[dict] = []
     for rec in bench:
-        if not args.all and _cot_reliability_flag(rec) is not True:
+        if not args.all and cot_reliability_flag(rec) is not True:
             continue
         ssf = rec.get("source_scene_file")
         clip_id = rec.get("clip_id")
@@ -177,7 +150,7 @@ def run(args: argparse.Namespace) -> int:
         rows.append(
             {
                 "clip_id": clip_id,
-                "cot_reliable": _cot_reliability_flag(rec),
+                "cot_reliable": cot_reliability_flag(rec),
                 "human_consistent": rec.get("cot_action_consistency"),
                 "human_planned_safe": human_safe,
                 "human_unsafe": human_safe is False,
@@ -323,7 +296,9 @@ def build_parser() -> argparse.ArgumentParser:
         description="Compute simulated safety outcomes for planned trajectories (Experiment A).",
     )
     p.add_argument(
-        "--benchmark_json", required=True, help="benchmark_expanded_100.json"
+        "--benchmark_json",
+        required=True,
+        help="Benchmark JSON with clip_id/source_scene_file entries.",
     )
     p.add_argument(
         "--scene_root",
