@@ -28,9 +28,9 @@ logger = logging.getLogger(__name__)
 # Fixed seed for deterministic decoding where the backend honours it.
 DEFAULT_SEED = 42
 
-# institutional GenAI gateway (OpenAI-compatible gateway running Kimi K2.5)
-DEFAULT_BASE_URL = "https://genai-gateway.example.edu/api"
-DEFAULT_MODEL = "Kimi K2.5"
+# Moonshot AI's public OpenAI-compatible API (Kimi K2.5).
+DEFAULT_BASE_URL = "https://api.moonshot.ai/v1"
+DEFAULT_MODEL = "kimi-k2.5"
 QWEN3_4B_FP8_MODEL = "Qwen/Qwen3-4B-FP8"
 QWEN35_4B_FP8_MODEL = "RedHatAI/Qwen3.5-4B-FP8-dynamic"
 QWEN3_LOCAL_BASE_URL = "http://localhost:8000/v1"
@@ -40,11 +40,11 @@ QWEN3_LOCAL_BASE_URL = "http://localhost:8000/v1"
 # backend. Each provider resolves its own API key / base URL from the
 # environment (loaded from .env).
 PROVIDERS: dict[str, dict] = {
-    "gateway": {
-        "label": "Institutional gateway (Kimi K2.5)",
+    "kimi": {
+        "label": "Moonshot Kimi K2.5",
         "model": DEFAULT_MODEL,
-        "api_key_env": "GENAI_GATEWAY_KEY",
-        "base_url_env": "GENAI_GATEWAY_BASE_URL",
+        "api_key_env": "MOONSHOT_API_KEY",
+        "base_url_env": "MOONSHOT_BASE_URL",
         "base_url": DEFAULT_BASE_URL,
         "temperature": 0,
         "supports_images": True,
@@ -216,8 +216,8 @@ def call_llm(
     Decoding is deterministic via a fixed seed where supported. ``temperature``
     is sent only when not None (reasoning models reject non-default values).
     ``extra_params`` carries provider-specific request fields. The call streams
-    and accumulates the content delta, which the institutional Open WebUI gateway requires
-    and other OpenAI-compatible servers (vLLM, OpenAI) support.
+    and accumulates the content delta, which some OpenAI-compatible gateways
+    require for long generations and all supported backends handle.
     """
     global _USE_JSON_MODE
 

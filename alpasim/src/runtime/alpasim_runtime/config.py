@@ -172,7 +172,7 @@ class ConsistencyMonitorConfig:
 
     enabled: bool = False
     # Judge backend: one of alpasim_utils.cot_consistency.PROVIDERS
-    # (qwen3_4b_fp8 / qwen35_4b_fp8 / openai / gateway).
+    # (qwen3_4b_fp8 / qwen35_4b_fp8 / openai / kimi).
     provider: str = "qwen3_4b_fp8"
     model: str | None = None  # override the provider's default model
     base_url: str | None = None  # override the provider's default endpoint
