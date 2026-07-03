@@ -36,8 +36,7 @@ Usage:
     # Full run with GPT-5.5 high on the lane-relative feature variant:
     uv run --extra llm python -m cot_analysis --provider openai \
         --benchmark_json data/benchmark/benchmark.json \
-        --prompt center_of_lane --trajectory_frame dual \
-        --lane_reference map_graph \
+        --variant center_of_lane \
         --output cot_consistency_gpt55.json
 
     # Full run with local Qwen3.5-4B FP8 (serve it first):
@@ -57,7 +56,10 @@ from alpasim_utils.cot_consistency import (
     DEFAULT_SEED,
     PROVIDERS,
     build_client,
+    consistency_variant_names,
+    normalize_consistency_variant_name,
     resolve_provider,
+    resolve_consistency_variant,
 )
 from benchmark_analysis import flatten_cot
 
@@ -156,13 +158,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="Delay between API calls in seconds (for rate-limited endpoints)",
     )
     parser.add_argument(
+        "--variant",
+        type=str,
+        default=None,
+        help=(
+            "Coupled prompt/feature configuration. Public choices: %s. "
+            "Legacy aliases are also accepted."
+            % ", ".join(consistency_variant_names())
+        ),
+    )
+    parser.add_argument(
         "--prompt",
         type=str,
-        default="default",
+        default=None,
         help=(
-            "Prompt template: a registered name (%s), or a path to a .py file "
-            "defining build_prompt(cot_text, traj_features). New prompt_<name>.py "
-            "files in this package are auto-discovered."
+            "Advanced override for --variant: registered prompt name (%s), "
+            "or a path to a .py file defining build_prompt(cot_text, "
+            "traj_features)."
             % ", ".join(discover_prompt_names())
         ),
     )
@@ -170,27 +182,20 @@ def build_parser() -> argparse.ArgumentParser:
         "--trajectory_frame",
         type=str,
         choices=["ego_rig", "lane_center", "dual"],
-        default="ego_rig",
+        default=None,
         help=(
-            "Feature frame for the predicted trajectory. lane_center projects "
-            "onto map geometry and falls back to ego_rig if no lane reference "
-            "is available. dual computes both ego-frame and lane-center "
-            "features (pairs with --prompt center_of_lane; lane_reference "
-            "auto means map_graph in dual)."
+            "Advanced override for --variant: feature frame for the predicted "
+            "trajectory."
         ),
     )
     parser.add_argument(
         "--lane_reference",
         type=str,
         choices=["auto", "map_graph", "map_graph_same_lane", "route"],
-        default="auto",
+        default=None,
         help=(
-            "Lane-center source when lane-center features are computed. "
-            "map_graph walks the lane successor graph to build one "
-            "route-consistent reference path (no per-point nearest-lane "
-            "switching). map_graph_same_lane evaluates the same candidate "
-            "starting lanes without traversing to predecessor or successor "
-            "lanes. auto prefers map_graph, then logged route waypoints."
+            "Advanced override for --variant: lane-center source when "
+            "lane-center features are computed."
         ),
     )
     parser.add_argument(
@@ -210,6 +215,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="Logging level",
     )
     return parser
+
+
+def _infer_variant_name(args: argparse.Namespace) -> str:
+    """Choose a coupled variant, accepting prompt-based calls as aliases."""
+    if args.variant:
+        return normalize_consistency_variant_name(args.variant)
+    if args.prompt in {"center_of_lane", "center_of_lane_v5"}:
+        return "center_of_lane"
+    return "llm"
+
+
+def _resolve_variant_settings(args: argparse.Namespace) -> tuple[str, str, str, str]:
+    """Resolve public variant plus optional advanced overrides."""
+    variant = resolve_consistency_variant(_infer_variant_name(args))
+    prompt = args.prompt or variant.prompt
+    trajectory_frame = args.trajectory_frame or variant.trajectory_frame
+    lane_reference = args.lane_reference or variant.lane_reference
+    return variant.name, prompt, trajectory_frame, lane_reference
 
 
 def load_resumable_results(
@@ -258,6 +281,16 @@ def load_resumable_results(
 def main():
     args = build_parser().parse_args()
 
+    try:
+        (
+            args.variant,
+            args.prompt,
+            args.trajectory_frame,
+            args.lane_reference,
+        ) = _resolve_variant_settings(args)
+    except ValueError as exc:
+        raise SystemExit(str(exc))
+
     # Resolve (and cache) the prompt builder up front so a bad --prompt fails
     # immediately instead of erroring on every entry.
     try:
@@ -297,15 +330,17 @@ def main():
             PROVIDERS[args.provider]["api_key_env"],
         )
     logger.info(
-        "Using prompt=%s, trajectory_frame=%s, lane_reference=%s",
+        "Using variant=%s, prompt=%s, trajectory_frame=%s, lane_reference=%s",
+        args.variant,
         args.prompt,
         args.trajectory_frame,
         args.lane_reference,
     )
-    if args.prompt == "default" and args.trajectory_frame == "lane_center":
+    if args.prompt == "default" and args.trajectory_frame != "ego_rig":
         logger.warning(
-            "lane_center features are intended for --prompt center_of_lane; "
-            "the default prompt describes ego-frame x/y coordinates."
+            "%s features are intended for --variant center_of_lane; the default "
+            "prompt describes ego-frame x/y coordinates.",
+            args.trajectory_frame,
         )
 
     # --- Extract entries ---
@@ -397,6 +432,7 @@ def main():
                 client,
                 provider["model"],
                 entry,
+                variant_name=args.variant,
                 prompt_name=args.prompt,
                 trajectory_frame=args.trajectory_frame,
                 lane_reference=args.lane_reference,

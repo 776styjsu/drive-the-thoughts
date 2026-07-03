@@ -107,8 +107,7 @@ command below without keys to verify the trajectory feature pipeline:
 ```bash
 uv run python -m cot_analysis \
   --benchmark_json data/benchmark/benchmark.json \
-  --prompt center_of_lane --trajectory_frame dual \
-  --lane_reference map_graph --skip-unreliable-cot \
+  --variant center_of_lane --skip-unreliable-cot \
   --output cot_dry.json
 ```
 
@@ -142,6 +141,12 @@ plotting/serving tools; use the maintained versions in this repo's `src/` and
 `tools/` instead. Simulator-side monitoring is unaffected: the online
 `ConsistencyMonitor` and the `cot_consistency` eval scorer, plus the
 `alpasim_utils` modules they need, remain part of the workspace.
+
+The shared monitor core exists in both trees so each uv workspace stays
+standalone, but `src/alpasim_utils` is the single source of truth: the copy
+inside `alpasim/` is a byte-identical mirror. Edit at the root, then run
+`uv run python tools/sync_monitor_core.py --fix`; `uv run pytest` fails if the
+mirror drifts.
 
 ## Validation
 

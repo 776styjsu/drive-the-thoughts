@@ -236,7 +236,7 @@ def _compute_lane_center_features(
         accel_basis = speeds
     else:
         speeds = np.linalg.norm(np.column_stack((ds, doffset)), axis=1) / dt
-        accel_basis = ds / dt  # legacy: lane-progress velocity
+        accel_basis = ds / dt  # acceleration follows lane-progress velocity
 
     if len(accel_basis) > 1:
         accel = np.diff(accel_basis) / dt

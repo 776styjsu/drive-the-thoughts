@@ -103,16 +103,6 @@ def parse_args() -> argparse.Namespace:
         help="Root for resolving benchmark source_scene_file paths. Default: %(default)s",
     )
     parser.add_argument(
-        "--prompt",
-        default="default",
-        help="Prompt for the plain LLM variant. Default: %(default)s",
-    )
-    parser.add_argument(
-        "--f-llm-prompt",
-        default="center_of_lane",
-        help="Prompt for the f-LLM map_graph variant. Default: %(default)s",
-    )
-    parser.add_argument(
         "--module",
         default="cot_analysis",
         help="Python module to run. Default: %(default)s",
@@ -293,16 +283,9 @@ def _selected_providers(value: str) -> list[tuple[str, str]]:
 
 def _variant_args(args: argparse.Namespace, variant: str) -> tuple[str, ...]:
     if variant == "llm":
-        return ("--prompt", args.prompt)
+        return ("--variant", "llm")
     if variant == "f_llm_map_graph":
-        return (
-            "--prompt",
-            args.f_llm_prompt,
-            "--trajectory_frame",
-            "dual",
-            "--lane_reference",
-            "map_graph",
-        )
+        return ("--variant", "f_llm_map_graph")
     raise ValueError(f"Unknown variant: {variant}")
 
 

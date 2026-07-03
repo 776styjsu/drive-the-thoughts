@@ -37,6 +37,7 @@ from alpasim_utils.cot_consistency import (
     call_llm,
     compute_trajectory_features,
     parse_response,
+    resolve_consistency_variant,
     resolve_provider,
     score_from_evaluation,
 )
@@ -44,8 +45,8 @@ from alpasim_utils.geometry import Trajectory
 
 logger = logging.getLogger(__name__)
 
-# Only the turn-aware lane-center prompt is wired for online judging. Keep the
-# old v5 name as a compatibility alias for existing configs and scripts.
+# Only the turn-aware lane-center prompt is wired for online judging. Additional
+# names are accepted as aliases for existing configs and scripts.
 _PROMPT_BUILDERS = {
     "center_of_lane": build_center_of_lane_prompt,
     "center_of_lane_v5": build_center_of_lane_prompt,
@@ -89,16 +90,24 @@ class ConsistencyMonitor:
     _client_failed: bool = field(default=False, init=False)
     _provider_settings: dict | None = field(default=None, init=False)
     _prompt_builder: Any = field(default=None, init=False)
+    _prompt_name: str = field(default="", init=False)
+    _trajectory_frame: str = field(default="", init=False)
+    _lane_reference: str = field(default="", init=False)
     _audit_path: Path | None = field(default=None, init=False)
     _step_counter: int = field(default=0, init=False)
 
     def __post_init__(self) -> None:
-        if self.config.prompt not in _PROMPT_BUILDERS:
+        variant = resolve_consistency_variant(self.config.variant)
+        self._prompt_name = self.config.prompt or variant.prompt
+        self._trajectory_frame = self.config.trajectory_frame or variant.trajectory_frame
+        self._lane_reference = self.config.lane_reference or variant.lane_reference
+
+        if self._prompt_name not in _PROMPT_BUILDERS:
             raise ValueError(
-                f"Unsupported online consistency prompt '{self.config.prompt}'. "
+                f"Unsupported online consistency prompt '{self._prompt_name}'. "
                 f"Supported: {sorted(_PROMPT_BUILDERS)}"
             )
-        self._prompt_builder = _PROMPT_BUILDERS[self.config.prompt]
+        self._prompt_builder = _PROMPT_BUILDERS[self._prompt_name]
 
     @classmethod
     def from_config(
@@ -134,10 +143,14 @@ class ConsistencyMonitor:
         else:
             logger.info(
                 "ConsistencyMonitor ready: %d lane-center polylines, provider=%s, "
-                "prompt=%s, max_samples=%d, accept_threshold=%.1f, every_n_steps=%d",
+                "variant=%s, prompt=%s, trajectory_frame=%s, lane_reference=%s, "
+                "max_samples=%d, accept_threshold=%.1f, every_n_steps=%d",
                 len(self._lane_center_lines),
                 self.config.provider,
-                self.config.prompt,
+                self.config.variant,
+                self._prompt_name,
+                self._trajectory_frame,
+                self._lane_reference,
                 self.config.max_samples,
                 self.config.accept_threshold,
                 self.config.monitor_every_n_steps,
@@ -188,8 +201,8 @@ class ConsistencyMonitor:
                 rig_xy,
                 trajectory_world_xy=world_xy,
                 lane_center_lines=self._lane_center_lines,
-                reference_frame=self.config.trajectory_frame,
-                lane_reference=self.config.lane_reference,
+                reference_frame=self._trajectory_frame,
+                lane_reference=self._lane_reference,
             )
             prompt = self._prompt_builder(cot_text, features)
         except Exception as exc:  # pragma: no cover - defensive

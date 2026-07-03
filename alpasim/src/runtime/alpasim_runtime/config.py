@@ -176,9 +176,12 @@ class ConsistencyMonitorConfig:
     provider: str = "qwen3_4b_fp8"
     model: str | None = None  # override the provider's default model
     base_url: str | None = None  # override the provider's default endpoint
-    prompt: str = "center_of_lane"  # center_of_lane_v5 is accepted as an alias
-    lane_reference: str = "map_graph"
-    trajectory_frame: str = "dual"
+    variant: str = "center_of_lane"
+    # Advanced/deprecated overrides. Leave unset to use the variant's coupled
+    # prompt, trajectory frame, and lane reference.
+    prompt: str | None = None
+    lane_reference: str | None = None
+    trajectory_frame: str | None = None
     max_samples: int = 3
     accept_threshold: float = 3.0
     monitor_every_n_steps: int = 1  # judge only every Nth control step
