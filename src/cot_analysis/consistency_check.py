@@ -23,11 +23,10 @@ Usage::
     # Score every clip under an extracted-frames directory:
     uv run python -m cot_analysis.consistency_check data/media/scenes
 
-    # Exact-label variant (no direction families; gentle_decelerate only matches
-    # gentle_decelerate). Defaults the output to
-    # benchmark.rule_consistency.exact.json:
+    # Score only the clips selected by a benchmark JSON using exact-label
+    # matching:
     uv run python -m cot_analysis.consistency_check \
-        --benchmark_json data/benchmark/benchmark.json --match-mode exact
+        --benchmark_json data/benchmark/benchmark.json
 """
 
 from __future__ import annotations
@@ -39,11 +38,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from alpasim_utils.consistency import (
-    MATCH_MODES,
-    ConsistencyReport,
-    match_cot_to_trajectory,
-)
+from alpasim_utils.consistency import ConsistencyReport, match_cot_to_trajectory
 from alpasim_utils.meta_actions_types import MetaActionThresholds
 from alpasim_utils.trajectory_additional_info import build_additional_info
 from benchmark_analysis import extract_entries, load_json
@@ -55,6 +50,7 @@ METADATA_FILENAME = "metadata.json"
 ADDITIONAL_INFO_FILENAME = "additional_info.json"
 DEFAULT_OUTPUT_FILENAME = "cot_consistency.json"
 DEFAULT_AGGREGATE_FILENAME = "cot_consistency_report.json"
+MATCH_MODE = "exact"
 
 
 @dataclass
@@ -91,7 +87,6 @@ def _process_clip(
     *,
     rederive_meta_actions: bool = False,
     meta_action_thresholds: MetaActionThresholds | None = None,
-    match_mode: str = "family",
 ) -> ClipResult:
     clip_dir = metadata_path.parent
     clip_id = clip_dir.name
@@ -168,7 +163,7 @@ def _process_clip(
             error=missing_meta_error,
         )
 
-    report = match_cot_to_trajectory(cot_text or "", meta_actions, match_mode=match_mode)
+    report = match_cot_to_trajectory(cot_text or "", meta_actions)
     return ClipResult(
         clip_id=clip_id,
         metadata_path=metadata_path,
@@ -180,11 +175,10 @@ def _process_clip(
 def _meta_action_provenance(
     rederive_meta_actions: bool,
     meta_action_thresholds: MetaActionThresholds | None,
-    match_mode: str = "family",
 ) -> dict:
     """Record how meta_actions were sourced, for report reproducibility."""
     return {
-        "match_mode": match_mode,
+        "match_mode": MATCH_MODE,
         "meta_action_source": (
             "rederived" if rederive_meta_actions else ADDITIONAL_INFO_FILENAME
         ),
@@ -258,7 +252,6 @@ def run(
     sidecar_name: str,
     rederive_meta_actions: bool = False,
     meta_action_thresholds: MetaActionThresholds | None = None,
-    match_mode: str = "family",
 ) -> dict:
     if not extracted_frames_dir.exists():
         raise FileNotFoundError(f"Directory does not exist: {extracted_frames_dir}")
@@ -275,7 +268,6 @@ def run(
             path,
             rederive_meta_actions=rederive_meta_actions,
             meta_action_thresholds=meta_action_thresholds,
-            match_mode=match_mode,
         )
         if per_clip_sidecars:
             _write_per_clip_sidecar(result, sidecar_name)
@@ -288,9 +280,7 @@ def run(
         "schema_version": 1,
         "kind": "alpasim_cot_consistency_report",
         "extracted_frames_dir": str(extracted_frames_dir),
-        **_meta_action_provenance(
-            rederive_meta_actions, meta_action_thresholds, match_mode
-        ),
+        **_meta_action_provenance(rederive_meta_actions, meta_action_thresholds),
         "summary": aggregate,
         "results": [r.to_dict() for r in results],
     }
@@ -307,7 +297,6 @@ def _process_benchmark_item(
     *,
     rederive_meta_actions: bool = False,
     meta_action_thresholds: MetaActionThresholds | None = None,
-    match_mode: str = "family",
 ) -> ClipResult:
     """Resolve one benchmark entry to its metadata.json and score that clip."""
     clip_id = str(item.get("clip_id", "")).strip()
@@ -332,7 +321,6 @@ def _process_benchmark_item(
         metadata_path,
         rederive_meta_actions=rederive_meta_actions,
         meta_action_thresholds=meta_action_thresholds,
-        match_mode=match_mode,
     )
     # Prefer the benchmark's clip_id so downstream tools (e.g.
     # check_consistency_accuracy.py) match entries by the benchmark key.
@@ -348,7 +336,6 @@ def run_benchmark(
     output_path: Path,
     rederive_meta_actions: bool = False,
     meta_action_thresholds: MetaActionThresholds | None = None,
-    match_mode: str = "family",
 ) -> dict:
     """Score only the clips selected by a benchmark JSON and write a report.
 
@@ -367,7 +354,6 @@ def run_benchmark(
             source_root,
             rederive_meta_actions=rederive_meta_actions,
             meta_action_thresholds=meta_action_thresholds,
-            match_mode=match_mode,
         )
         for item in items
     ]
@@ -379,9 +365,7 @@ def run_benchmark(
         "kind": "alpasim_cot_consistency_report",
         "benchmark_file": str(benchmark_json),
         "benchmark_source_root": str(source_root),
-        **_meta_action_provenance(
-            rederive_meta_actions, meta_action_thresholds, match_mode
-        ),
+        **_meta_action_provenance(rederive_meta_actions, meta_action_thresholds),
         "summary": aggregate,
         "results": [r.to_dict() for r in results],
     }
@@ -445,18 +429,6 @@ def main(argv: list[str] | None = None) -> int:
         help=f"Per-clip sidecar filename (default: {DEFAULT_OUTPUT_FILENAME}).",
     )
     parser.add_argument(
-        "--match-mode",
-        choices=MATCH_MODES,
-        default="family",
-        help=(
-            "How a CoT label matches a trajectory label. 'family' (default) is "
-            "the Alpamayo-R1 behaviour where same-direction labels (e.g. "
-            "gentle/strong decelerate) are interchangeable; 'exact' matches by "
-            "exact label only (gentle_decelerate != strong_decelerate) and never "
-            "emits the 'contradictory' label."
-        ),
-    )
-    parser.add_argument(
         "--rederive-meta-actions",
         action="store_true",
         help=(
@@ -496,14 +468,10 @@ def main(argv: list[str] | None = None) -> int:
         MetaActionThresholds(**threshold_overrides) if rederive_meta_actions else None
     )
 
-    # Tag the default output with the match mode so an exact-mode run does not
-    # clobber the family-mode report (and vice versa).
-    mode_suffix = "" if args.match_mode == "family" else f".{args.match_mode}"
-
     if has_benchmark:
         output_path = args.output or (
             args.benchmark_json.parent
-            / f"{args.benchmark_json.stem}.rule_consistency{mode_suffix}.json"
+            / f"{args.benchmark_json.stem}.rule_consistency.json"
         )
         summary = run_benchmark(
             args.benchmark_json,
@@ -511,7 +479,6 @@ def main(argv: list[str] | None = None) -> int:
             output_path=output_path,
             rederive_meta_actions=rederive_meta_actions,
             meta_action_thresholds=meta_action_thresholds,
-            match_mode=args.match_mode,
         )
     else:
         output_path = args.output or (args.extracted_frames_dir / DEFAULT_AGGREGATE_FILENAME)
@@ -522,10 +489,9 @@ def main(argv: list[str] | None = None) -> int:
             sidecar_name=args.sidecar_name,
             rederive_meta_actions=rederive_meta_actions,
             meta_action_thresholds=meta_action_thresholds,
-            match_mode=args.match_mode,
         )
 
-    print(f"Match mode: {args.match_mode}")
+    print("Matching: exact labels")
     if rederive_meta_actions:
         print(f"Meta-actions re-derived with thresholds: {asdict(meta_action_thresholds)}")
     print(f"Scored {summary['scored_clips']}/{summary['total_clips']} clips.")

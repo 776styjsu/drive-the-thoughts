@@ -18,8 +18,8 @@ safety intervention through the ``safety_monitor_safe`` hook (mirrors
 :class:`eval.scorers.safety.SafetyScorer`).
 
 Metrics added:
-* ``cot_inconsistent`` -- 1 when the active plan's CoT contradicts/mismatches the
-  trajectory (rule monitor label in {inconsistent, contradictory}), else 0.
+* ``cot_inconsistent`` -- 1 when the active plan's CoT mismatches the
+  trajectory (rule monitor label ``inconsistent``), else 0.
 * ``cot_consistency_score`` -- the rule monitor's binary score (1 consistent).
 
 This scorer is **opt-in**: it is intentionally not part of the default
@@ -100,7 +100,7 @@ class CotConsistencyScorer(Scorer):
                 build_additional_info(meta, metadata_path="<sim>").get("meta_actions")
                 or {}
             )
-            report = match_cot_to_trajectory(cot, meta_actions, match_mode="family")
+            report = match_cot_to_trajectory(cot, meta_actions)
         except Exception as exc:  # pragma: no cover - defensive
             logger.warning("CoT consistency scoring failed: %s", exc)
             return None

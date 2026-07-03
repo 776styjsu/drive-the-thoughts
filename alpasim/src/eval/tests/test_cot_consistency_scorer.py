@@ -82,7 +82,7 @@ def test_missing_response_is_inert():
     assert metrics["cot_inconsistent"].values == [False, False]
 
 
-def test_contradictory_cot_is_flagged():
+def test_mismatched_cot_is_flagged():
     # A straight, steady trajectory while the CoT claims a left turn + braking
     # should be scored inconsistent by the rule monitor.
     traj = _straight_traj()

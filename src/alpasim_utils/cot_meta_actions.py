@@ -16,9 +16,9 @@ Design notes:
     pattern itself: phrases that denote a forceful manoeuvre map directly to a
     strong/sharp label (e.g. "brake hard" -> ``strong_decelerate``). There is no
     separate adjacent-adverb promotion step, so the matched phrase alone
-    determines the emitted label. This keeps the parser aligned with the paper's
-    coarse rule-based matching, where the consistency reward is magnitude-
-    agnostic (gentle and strong share a direction family).
+    determines the emitted label. The consistency reward compares these emitted
+    labels exactly, so magnitude-specific wording should map to the
+    corresponding magnitude-specific label.
   * Multiple sentences are supported; ordered action sequences are retained,
     while the first action per axis is exposed as a compact summary.
   * No LLM dependency. For richer parsing, a thin LLM-backed parser can be

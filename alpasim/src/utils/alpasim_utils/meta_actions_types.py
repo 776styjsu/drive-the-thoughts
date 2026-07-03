@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2026 NVIDIA Corporation
 
-"""Shared meta-action vocabulary for Alpamayo-R1-style consistency analysis.
+"""Shared meta-action vocabulary for CoT/trajectory consistency analysis.
 
 Both the trajectory parser (``trajectory_additional_info``) and the CoT parser
 (``cot_meta_actions``) emit labels from the enums defined here; the consistency
-matcher (``consistency``) compares them. Keeping the enums + family groupings
-in one tiny module avoids circular imports and gives one place to extend the
+matcher (``consistency``) compares those labels exactly. Keeping the enums in
+one tiny module avoids circular imports and gives one place to extend the
 vocabulary.
 """
 
@@ -36,68 +36,6 @@ class LateralAction(str, Enum):
     REVERSE_LEFT = "reverse_left"
     REVERSE_RIGHT = "reverse_right"
     UNKNOWN = "unknown"
-
-
-# Direction families used by the consistency matcher to decide whether two
-# labels are in the same family (compatible) or opposite families (contradict).
-LONGITUDINAL_FAMILIES: dict[str, frozenset[LongitudinalAction]] = {
-    "accel": frozenset(
-        {LongitudinalAction.GENTLE_ACCELERATE, LongitudinalAction.STRONG_ACCELERATE}
-    ),
-    "decel": frozenset(
-        {LongitudinalAction.GENTLE_DECELERATE, LongitudinalAction.STRONG_DECELERATE}
-    ),
-    "stop": frozenset({LongitudinalAction.STOP}),
-    "maintain": frozenset({LongitudinalAction.MAINTAIN_SPEED}),
-    "reverse": frozenset({LongitudinalAction.REVERSE}),
-}
-
-LATERAL_FAMILIES: dict[str, frozenset[LateralAction]] = {
-    "left": frozenset(
-        {
-            LateralAction.STEER_LEFT,
-            LateralAction.SHARP_STEER_LEFT,
-            LateralAction.REVERSE_LEFT,
-        }
-    ),
-    "right": frozenset(
-        {
-            LateralAction.STEER_RIGHT,
-            LateralAction.SHARP_STEER_RIGHT,
-            LateralAction.REVERSE_RIGHT,
-        }
-    ),
-    "straight": frozenset({LateralAction.GO_STRAIGHT}),
-}
-
-# Contradiction = opposite family. Same family = compatible (different magnitude).
-LONGITUDINAL_CONTRADICTIONS: frozenset[frozenset[str]] = frozenset(
-    {
-        frozenset({"accel", "decel"}),
-        frozenset({"accel", "stop"}),
-        frozenset({"accel", "reverse"}),
-    }
-)
-
-LATERAL_CONTRADICTIONS: frozenset[frozenset[str]] = frozenset(
-    {
-        frozenset({"left", "right"}),
-    }
-)
-
-
-def longitudinal_family(action: LongitudinalAction) -> str | None:
-    for name, members in LONGITUDINAL_FAMILIES.items():
-        if action in members:
-            return name
-    return None
-
-
-def lateral_family(action: LateralAction) -> str | None:
-    for name, members in LATERAL_FAMILIES.items():
-        if action in members:
-            return name
-    return None
 
 
 @dataclass(frozen=True)

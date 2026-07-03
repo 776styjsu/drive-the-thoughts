@@ -3,39 +3,46 @@
 This repository implements the paper "Drive the Thoughts: Runtime Monitoring
 of VLA Reasoning-Trajectory Consistency".
 
+There are two ways to use it:
+
+1. **Data-first (lightweight).** Recompute checks, tables, and plots from the
+   released benchmark and monitor outputs. Needs only `uv` and a few small
+   dependencies.
+2. **Simulator (full).** Inspect or rerun the pinned AlpaSim workspace under
+   `alpasim/`, including the online consistency monitor.
+
 ## Layout
 
-- `data/benchmark/benchmark.json`: canonical benchmark with 150 entries, 100
-  of them in the reliable subset, using artifact-relative media paths.
-- `data/results/llm_matrix/`: raw LLM judge outputs over the reliable subset.
-- `data/results/rule/benchmark.rule_consistency.json`: deterministic rule
-  monitor output (produced with `--match-mode exact`).
-- `data/media/videos/`, `data/media/scenes/`: rollout videos and per-clip
-  scene directories (`metadata.json`, `trajectory_plot_geometry.json`,
-  `additional_info.json`, camera frame).
-- `src/`: installable packages for the monitor implementation:
-  - `alpasim_utils/`: shared monitor core — rule-based CoT parsing and
-    consistency matching, trajectory features, lane projection, and the
-    OpenAI-compatible LLM judge client (`alpasim_utils.cot_consistency`).
-  - `cot_analysis/`: the LLM-judge pipeline (`python -m cot_analysis`) and the
-    deterministic rule-based checker
-    (`python -m cot_analysis.consistency_check`).
-  - `trajectory_safety/`: geometric safety outcomes for planned trajectories
-    (`python -m trajectory_safety`, Experiment A).
-  - `benchmark_analysis/`: shared analysis library used by every script in
-    `tools/` for benchmark loading, entry schema accessors, judgment
-    normalization, and classification metrics.
-- `tools/`: thin analysis/plotting CLIs plus serving and Slurm helpers.
-- `tests/`: unit tests (`uv run pytest`).
-- `alpasim/`: pinned AlpaSim workspace snapshot with its own `pyproject.toml`
-  and `uv.lock`. It intentionally omits generated rollouts, caches, model/data
-  artifacts, paper source, secrets, and obsolete benchmark variants. It keeps
-  exactly the monitor code the simulator itself runs — the rule-based
-  consistency core and the LLM-judge subpackage in `alpasim_utils`, consumed
-  by the online `ConsistencyMonitor` in `alpasim_runtime` and the eval scorer.
-  Offline analysis code that duplicated this repo's `src/` and `tools/` has
-  been removed from the snapshot; the maintained versions live at the artifact
-  root.
+- `data/benchmark/benchmark.json` — the benchmark: 150 entries, 100 in the
+  reliable subset, with artifact-relative media paths.
+- `data/results/llm_matrix/` — raw LLM judge outputs over the reliable subset.
+- `data/results/rule/benchmark.rule_consistency.json` — deterministic
+  exact-label rule monitor output.
+- `data/media/` — rollout videos and per-clip scene directories (metadata,
+  trajectory geometry, `additional_info.json`, camera frame).
+- `src/` — the monitor implementation, installed as packages:
+  - `alpasim_utils` — shared monitor core: rule-based CoT parsing and
+    matching, trajectory features, lane projection, and the OpenAI-compatible
+    judge client.
+  - `cot_analysis` — the LLM-judge pipeline (`python -m cot_analysis`) and
+    the rule-based checker (`python -m cot_analysis.consistency_check`).
+  - `trajectory_safety` — geometric safety outcomes (Experiment A).
+  - `benchmark_analysis` — benchmark loading, schema accessors, and metrics,
+    used by every script in `tools/`.
+- `tools/` — analysis and plotting CLIs, the vLLM serve script, and Slurm
+  helpers.
+- `tests/` — unit tests (`uv run pytest`).
+- `alpasim/` — pinned AlpaSim workspace with its own `pyproject.toml` and
+  `uv.lock`. It ships the simulator plus exactly the monitor code it runs
+  online (the `ConsistencyMonitor` and the eval scorer). Offline analysis
+  lives only at the artifact root. Large generated data, models, and rollouts
+  are omitted.
+
+One rule when editing monitor code: `src/alpasim_utils` is the source of
+truth, and `alpasim/` carries a byte-identical mirror so the simulator
+workspace stays standalone. Edit at the root, then run
+`uv run python tools/sync_monitor_core.py --fix`. `pytest` fails if the two
+trees drift.
 
 ## Setup
 
@@ -43,16 +50,14 @@ of VLA Reasoning-Trajectory Consistency".
 uv sync --frozen
 ```
 
-This installs the small dependency set and the `src/` packages. After that,
-`uv run ...` works for every command below without PYTHONPATH changes.
+That is the whole setup for the data-first path; every command below then
+works via `uv run ...` with no PYTHONPATH tweaks.
 
-Optional extras: use `uv sync --extra llm` to add the `openai` client for LLM
-judge reruns (or prefix one-off LLM commands with `uv run --extra llm`), and
-`uv sync --extra xlsx` to add `openpyxl` for spreadsheet output.
+Two optional extras: `--extra llm` adds the `openai` client for LLM judge
+reruns (or prefix one-off commands with `uv run --extra llm`), and
+`--extra xlsx` adds `openpyxl` for spreadsheet output.
 
 ## Quick Checks
-
-From the artifact root:
 
 ```bash
 # F-LLM monitor vs. human labels on the reliable subset
@@ -67,42 +72,35 @@ uv run python tools/check_consistency_accuracy.py \
   --benchmark-file data/benchmark/benchmark.json \
   --consistency-type alpasim_cot_consistency_report \
   --reliable-only
-```
 
-Regenerate the main-evaluation figure and the reliability heatmap. The default
-inputs point at the released data:
-
-```bash
+# Main-evaluation figure and reliability heatmap (defaults use released data)
 uv run python tools/plot_repeated_main_eval.py --output repeated_main_eval.pdf
 uv run python tools/plot_cot_reliability_heatmap.py --output heatmap.html
-```
 
-Run the packaged unit tests:
-
-```bash
+# Unit tests
 uv run pytest
 ```
 
 ## Recomputing Monitor Outputs
 
-You can rerun the deterministic rule monitor fully offline. It reproduces
-`data/results/rule/benchmark.rule_consistency.json` exactly:
+The rule monitor runs fully offline and reproduces the released file exactly:
 
 ```bash
 uv run python -m cot_analysis.consistency_check \
   --benchmark_json data/benchmark/benchmark.json \
-  --match-mode exact \
   --output benchmark.rule_consistency.json
 ```
 
-The LLM judge needs API access, or a local vLLM server for Qwen through
-`tools/serve_qwen_vllm.sh`. All backends speak the OpenAI-compatible API:
-`--provider kimi` targets Moonshot's public endpoint (key: `MOONSHOT_API_KEY`)
-and `--provider openai` targets OpenAI (key: `OPENAI_API_KEY`). Pass keys with
-`--api_key`, per-provider `--*-api-key` flags on the matrix runner, the
-environment, or a `.env` file; point `--base_url`/`--model` at any other
-OpenAI-compatible host (e.g. OpenRouter) without code changes. You can run the
-command below without keys to verify the trajectory feature pipeline:
+The LLM judge needs an OpenAI-compatible backend:
+
+- `--provider kimi` — Moonshot's public API (key: `MOONSHOT_API_KEY`)
+- `--provider openai` — OpenAI (key: `OPENAI_API_KEY`)
+- `--provider qwen35_4b_fp8` — your own local vLLM server (no key needed)
+
+Pass keys with `--api_key`, the per-provider `--*-api-key` flags on the matrix
+runner, the environment, or a `.env` file. Any other OpenAI-compatible host
+works through `--base_url` and `--model` — no code changes. Without a key the
+judge runs dry and still verifies the trajectory feature pipeline:
 
 ```bash
 uv run python -m cot_analysis \
@@ -111,12 +109,30 @@ uv run python -m cot_analysis \
   --output cot_dry.json
 ```
 
-`tools/run_benchmark_llm_matrix.py` runs the full provider/variant matrix and
-writes repeated runs, manifests, and logs to `runs/llm_matrix/`.
-If you have not already synced the `llm` extra, run it as
-`uv run --extra llm python tools/run_benchmark_llm_matrix.py ...`.
-`tools/run_benchmark_llm_matrix_update.slurm.sh` wraps the same workflow for
-Slurm clusters.
+### Example: the Qwen matrix, end to end
+
+`tools/run_benchmark_llm_matrix.py` runs the provider/variant matrix and
+writes repeated runs, logs, and a manifest to `runs/llm_matrix/`. For the
+local Qwen judge you need a GPU, a running vLLM server, and then the runner —
+in that order.
+
+```bash
+# 1. Get a GPU node (Slurm example — we used one A100 80GB; adjust the
+#    account/partition/constraint to your site).
+salloc -A your_hpc_account -p gpu --gres=gpu:1 -c 8 --mem=64G -t 4:00:00
+
+# 2. Serve Qwen3.5-4B-FP8 behind an OpenAI-compatible API on localhost:8000.
+tools/serve_qwen_vllm.sh qwen35 setup    # first time only: installs vLLM
+tools/serve_qwen_vllm.sh qwen35 serve    # keep running (own terminal or &)
+curl -sf http://localhost:8000/v1/models # ready once this responds
+
+# 3. Run the matrix for the qwen provider (3 repeats over the reliable subset).
+uv run --extra llm python tools/run_benchmark_llm_matrix.py --providers qwen
+```
+
+The runner points `qwen` at `http://localhost:8000/v1` with an `EMPTY` key by
+default, so no credentials are involved. `tools/run_benchmark_llm_matrix_update.slurm.sh`
+wraps the same workflow (including starting the server) as a batch job.
 
 ## AlpaSim Setup
 
@@ -129,24 +145,15 @@ source setup_local_env.sh
 uv sync --frozen
 ```
 
-Run simulator commands with `uv run ...` from inside `alpasim/`. This source
-snapshot preserves the implementation context and Apptainer setup, but it does
-not bundle the full upstream data/model store. We omit large generated data and
-rollouts; the benchmark media needed for the JSON-output tier lives in the
-artifact root under `data/media/`.
+Run simulator commands with `uv run ...` from inside `alpasim/`. The snapshot
+preserves the implementation and Apptainer setup but not the upstream
+data/model store; the benchmark media lives at the artifact root under
+`data/media/`.
 
-The snapshot no longer carries its own copies of the offline analysis
-packages (`cot_analysis`, `trajectory_safety`) or the benchmark
-plotting/serving tools; use the maintained versions in this repo's `src/` and
-`tools/` instead. Simulator-side monitoring is unaffected: the online
-`ConsistencyMonitor` and the `cot_consistency` eval scorer, plus the
-`alpasim_utils` modules they need, remain part of the workspace.
-
-The shared monitor core exists in both trees so each uv workspace stays
-standalone, but `src/alpasim_utils` is the single source of truth: the copy
-inside `alpasim/` is a byte-identical mirror. Edit at the root, then run
-`uv run python tools/sync_monitor_core.py --fix`; `uv run pytest` fails if the
-mirror drifts.
+The snapshot has no copies of the offline analysis packages or plotting
+tools — those live only at the artifact root. Simulator-side monitoring is
+self-contained: the online `ConsistencyMonitor`, the eval scorer, and the
+mirrored `alpasim_utils` monitor core they import.
 
 ## Validation
 
