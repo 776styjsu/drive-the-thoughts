@@ -36,7 +36,7 @@ Usage:
     # Full run with GPT-5.5 high on the lane-relative feature variant:
     uv run --extra llm python -m cot_analysis --provider openai \
         --benchmark_json data/benchmark/benchmark.json \
-        --prompt center_of_lane_v5 --trajectory_frame dual \
+        --prompt center_of_lane --trajectory_frame dual \
         --lane_reference map_graph \
         --output cot_consistency_gpt55.json
 
@@ -175,7 +175,7 @@ def build_parser() -> argparse.ArgumentParser:
             "Feature frame for the predicted trajectory. lane_center projects "
             "onto map geometry and falls back to ego_rig if no lane reference "
             "is available. dual computes both ego-frame and lane-center "
-            "features (pairs with --prompt center_of_lane_v5; lane_reference "
+            "features (pairs with --prompt center_of_lane; lane_reference "
             "auto means map_graph in dual)."
         ),
     )
@@ -304,7 +304,7 @@ def main():
     )
     if args.prompt == "default" and args.trajectory_frame == "lane_center":
         logger.warning(
-            "lane_center features are intended for --prompt center_of_lane_v5; "
+            "lane_center features are intended for --prompt center_of_lane; "
             "the default prompt describes ego-frame x/y coordinates."
         )
 

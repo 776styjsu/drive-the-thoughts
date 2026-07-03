@@ -1,17 +1,7 @@
 # Drive the Thoughts Artifact
 
-This repository accompanies the paper "Drive the Thoughts: Runtime Monitoring
+This repository implements the paper "Drive the Thoughts: Runtime Monitoring
 of VLA Reasoning-Trajectory Consistency".
-
-It supports two reproduction paths:
-
-1. Use the lightweight, data-first path to recompute checks, tables, and plots
-   from the released benchmark and JSON monitor outputs.
-2. Use the pinned AlpaSim source under `alpasim/` if you want to inspect the
-   simulator setup or attempt full simulator reruns.
-
-Use Apptainer for AlpaSim. The README intentionally avoids documenting
-alternate simulator setup paths so the supported workflow stays focused.
 
 ## Layout
 
@@ -47,9 +37,7 @@ alternate simulator setup paths so the supported workflow stays focused.
   been removed from the snapshot; the maintained versions live at the artifact
   root.
 
-## Lightweight Setup
-
-For the lightweight path, run `uv` from the artifact root:
+## Setup
 
 ```bash
 uv sync --frozen
@@ -67,7 +55,7 @@ judge reruns (or prefix one-off LLM commands with `uv run --extra llm`), and
 From the artifact root:
 
 ```bash
-# LLM judge vs. human labels on the reliable subset
+# F-LLM monitor vs. human labels on the reliable subset
 uv run python tools/check_consistency_accuracy.py \
   --consistency-file data/results/llm_matrix/gpt.f_llm_map_graph.run_003.json \
   --benchmark-file data/benchmark/benchmark.json \
@@ -119,7 +107,7 @@ command below without keys to verify the trajectory feature pipeline:
 ```bash
 uv run python -m cot_analysis \
   --benchmark_json data/benchmark/benchmark.json \
-  --prompt center_of_lane_v5 --trajectory_frame dual \
+  --prompt center_of_lane --trajectory_frame dual \
   --lane_reference map_graph --skip-unreliable-cot \
   --output cot_dry.json
 ```

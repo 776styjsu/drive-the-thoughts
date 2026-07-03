@@ -21,7 +21,7 @@ import importlib.util
 from collections.abc import Callable
 from pathlib import Path
 
-from alpasim_utils.cot_consistency import build_center_of_lane_v5_prompt
+from alpasim_utils.cot_consistency import build_center_of_lane_prompt
 
 PromptBuilder = Callable[[str, dict], str]
 
@@ -32,7 +32,8 @@ PROMPT_ALIASES = {
 
 #: Prompt builders implemented outside this package (shared with the runtime).
 EXTERNAL_BUILDERS: dict[str, PromptBuilder] = {
-    "center_of_lane_v5": build_center_of_lane_v5_prompt,
+    "center_of_lane": build_center_of_lane_prompt,
+    "center_of_lane_v5": build_center_of_lane_prompt,
 }
 
 _PROMPT_DIR = Path(__file__).resolve().parent

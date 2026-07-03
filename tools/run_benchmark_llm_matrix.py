@@ -6,7 +6,7 @@
 
 Runs Qwen (local vLLM), Kimi (Moonshot API), and GPT (OpenAI API) for:
 - llm: default prompt.py with ego-frame trajectory features.
-- f_llm_map_graph: prompt center_of_lane_v5 with dual/map_graph features.
+- f_llm_map_graph: prompt center_of_lane with dual/map_graph features.
 
 API keys come from --kimi-api-key/--gpt-api-key/--qwen-api-key, falling back
 to each provider's environment variable (also loaded from .env by
@@ -109,7 +109,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--f-llm-prompt",
-        default="center_of_lane_v5",
+        default="center_of_lane",
         help="Prompt for the f-LLM map_graph variant. Default: %(default)s",
     )
     parser.add_argument(

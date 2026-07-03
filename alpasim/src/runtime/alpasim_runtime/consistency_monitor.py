@@ -33,7 +33,7 @@ from typing import Any
 import numpy as np
 from alpasim_runtime.config import ConsistencyMonitorConfig
 from alpasim_utils.cot_consistency import (
-    build_center_of_lane_v5_prompt,
+    build_center_of_lane_prompt,
     call_llm,
     compute_trajectory_features,
     parse_response,
@@ -44,10 +44,11 @@ from alpasim_utils.geometry import Trajectory
 
 logger = logging.getLogger(__name__)
 
-# Only the lane-center v5 prompt is wired for online judging (it is the
-# turn-aware map_graph prompt). Map the config name to its builder.
+# Only the turn-aware lane-center prompt is wired for online judging. Keep the
+# old v5 name as a compatibility alias for existing configs and scripts.
 _PROMPT_BUILDERS = {
-    "center_of_lane_v5": build_center_of_lane_v5_prompt,
+    "center_of_lane": build_center_of_lane_prompt,
+    "center_of_lane_v5": build_center_of_lane_prompt,
 }
 
 _ALIGNMENT_DIMENSION = "cot_output_alignment"

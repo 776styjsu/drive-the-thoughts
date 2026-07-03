@@ -20,12 +20,15 @@ from .llm_judge import (
     resolve_provider,
     score_from_evaluation,
 )
-from .prompt_center_of_lane_v5 import build_prompt as build_center_of_lane_v5_prompt
+from .prompt_center_of_lane import build_prompt as build_center_of_lane_prompt
 from .trajectory_features import compute_trajectory_features
+
+build_center_of_lane_v5_prompt = build_center_of_lane_prompt
 
 __all__ = [
     "DEFAULT_SEED",
     "PROVIDERS",
+    "build_center_of_lane_prompt",
     "build_center_of_lane_v5_prompt",
     "build_client",
     "call_llm",

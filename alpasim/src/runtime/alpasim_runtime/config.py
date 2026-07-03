@@ -176,7 +176,7 @@ class ConsistencyMonitorConfig:
     provider: str = "qwen3_4b_fp8"
     model: str | None = None  # override the provider's default model
     base_url: str | None = None  # override the provider's default endpoint
-    prompt: str = "center_of_lane_v5"  # only center_of_lane_v5 is wired online
+    prompt: str = "center_of_lane"  # center_of_lane_v5 is accepted as an alias
     lane_reference: str = "map_graph"
     trajectory_frame: str = "dual"
     max_samples: int = 3
