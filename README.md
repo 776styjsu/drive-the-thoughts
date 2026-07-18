@@ -18,6 +18,9 @@ There are two ways to use it:
 - `data/results/llm_matrix/` — raw LLM judge outputs over the reliable subset.
 - `data/results/rule/benchmark.rule_consistency.json` — deterministic
   exact-label rule monitor output.
+- `data/results/rollout_monitoring/` — closed-loop online-monitoring results
+  (Experiment B): per-step rule-monitor flags joined with simulated safety
+  outcomes over 79 rollouts. See its README for provenance caveats.
 - `data/media/` — rollout videos and per-clip scene directories (metadata,
   trajectory geometry, `additional_info.json`, camera frame).
 - `src/` — the monitor implementation, installed as packages:
@@ -152,8 +155,25 @@ data/model store; the benchmark media lives at the artifact root under
 
 The snapshot has no copies of the offline analysis packages or plotting
 tools — those live only at the artifact root. Simulator-side monitoring is
-self-contained: the online `ConsistencyMonitor`, the eval scorer, and the
-mirrored `alpasim_utils` monitor core they import.
+self-contained: the online `ConsistencyMonitor` (judging each candidate
+trajectory inside the best-of-N resampling loop in
+`alpasim_runtime/events/policy.py`), the eval scorer, the mirrored
+`alpasim_utils` monitor core they import, and the closed-loop analysis tool
+`src/tools/rollout_monitoring` (Experiment B). The latter replays the logged
+decisions of existing rollouts through the rule monitor and joins the
+per-step flags with the evaluator's simulated safety outcomes — no GPU or
+re-simulation needed:
+
+```bash
+cd alpasim
+PYTHONPATH=src/tools uv run --project src/tools python -m rollout_monitoring \
+  --rollout_root <dir-with-scene_*/rollouts/**/rollout.asl> \
+  --outcome offroad_or_collision_at_fault --horizon_s 4 \
+  --output online_monitoring.json
+```
+
+Released outputs of this tool ship under `data/results/rollout_monitoring/`
+(the rollouts themselves are too large to include).
 
 ## Validation
 
