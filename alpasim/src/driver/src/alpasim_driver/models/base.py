@@ -53,6 +53,7 @@ class PredictionInput:
     speed: float  # m/s
     acceleration: float  # m/s²
     ego_pose_history: list[Any]  # list[PoseAtTime]
+    inference_seed: int  # Session seed plus the zero-based inference count
 
 
 @dataclass
@@ -64,6 +65,10 @@ class ModelPrediction:
     reasoning_text: str | None = (
         None  # optional text output (e.g. chain-of-causation reasoning)
     )
+
+
+class ModelInputValidationError(ValueError):
+    """Raised when model inputs fail a precondition checked before inference."""
 
 
 class BaseTrajectoryModel(ABC):

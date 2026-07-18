@@ -19,7 +19,7 @@ from hydra.core.global_hydra import GlobalHydra
 from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig, MissingMandatoryValue, OmegaConf
 
-from .schema import AlpasimConfig, RunMode
+from .schema import AlpasimConfig
 
 logger = logging.getLogger("alpasim_wizard")
 
@@ -81,9 +81,13 @@ def _check_required_config_groups(cfg: AlpasimConfig) -> None:
     # Each entry: (dotted config path to probe, Hydra group name, CLI syntax)
     required_checks = [
         ("defines.filesystem", "deploy", "deploy=<target>"),
-        ("services.sensorsim.replicas_per_container", "topology", "topology=<layout>"),
-        ("driver", "driver", "driver=<model>"),
+        ("services.renderer.replicas_per_container", "topology", "topology=<layout>"),
     ]
+    # Driver config is only required when the driver service is being launched.
+    # In daemon mode (run_sim_services excludes driver), no driver model is needed.
+    run_sim_services = list(cfg.wizard.run_sim_services or [])
+    if "driver" in run_sim_services:
+        required_checks.append(("driver", "driver", "driver=<model>"))
 
     missing = []
     for path, group, arg in required_checks:
@@ -107,40 +111,68 @@ def _check_required_config_groups(cfg: AlpasimConfig) -> None:
         raise SystemExit("\n".join(lines))
 
 
+def _check_run_sim_services_defined(cfg: AlpasimConfig) -> None:
+    """Check that launched services exist and are configured."""
+    services_dict = OmegaConf.to_container(cfg.services) or {}
+    if not isinstance(services_dict, dict):
+        raise TypeError("Expected `services` to be a mapping.")
+    if not cfg.wizard.run_sim_services:
+        return
+
+    undefined_services = [
+        s for s in cfg.wizard.run_sim_services if s not in services_dict
+    ]
+    if undefined_services:
+        raise RuntimeError(
+            f"Services {undefined_services} in `wizard.run_sim_services` "
+            f"are not defined in the `services` section."
+        )
+
+    unset_services = [
+        s
+        for s in cfg.wizard.run_sim_services
+        if s in services_dict and services_dict.get(s) is None
+    ]
+    if unset_services:
+        raise RuntimeError(
+            f"Services {unset_services} in `wizard.run_sim_services` "
+            f"are set to null in the `services` section."
+        )
+
+
 def validate_config(cfg: AlpasimConfig) -> None:
     """Validate the configuration for consistency and completeness.
 
     This function performs all validation checks that should happen
     after the configuration is loaded but before it's used.
     """
+    _check_run_sim_services_defined(cfg)
     _check_required_config_groups(cfg)
 
+    do_shutdown = OmegaConf.select(cfg.runtime, "endpoints.do_shutdown", default=True)
+    if do_shutdown is False:
+        logger.warning(
+            "runtime.endpoints.do_shutdown=false is ignored: shutdown behavior "
+            "changed and managed services now shut down after the runtime exits."
+        )
+
     # Validate NRE version configuration
-    if cfg.scenes.nre_version_string is None and not cfg.services.sensorsim:
+    if cfg.scenes.nre_version_string is None and not cfg.services.renderer:
         raise RuntimeError(
-            "Either `scenes.nre_version_string` or `services.sensorsim.image` must be set "
+            "Either `scenes.nre_version_string` or `services.renderer.image` must be set "
             "to determine the NRE version."
         )
 
-    # Validate service list
-    services_dict = OmegaConf.to_container(cfg.services) or {}
-    if cfg.wizard.run_sim_services:
-        undefined_services = [
-            s for s in cfg.wizard.run_sim_services if s not in services_dict
-        ]
-        if undefined_services:
-            raise RuntimeError(
-                f"Services {undefined_services} in `wizard.run_sim_services` "
-                f"are not defined in the `services` section."
-            )
+    driver_in_run_list = "driver" in (cfg.wizard.run_sim_services or [])
+    external_services = cfg.wizard.external_services or {}
+    external_driver_addresses = external_services.get("driver") or []
 
-    if cfg.wizard.run_mode != RunMode.BATCH:
-        total_services = len(cfg.wizard.run_sim_services or [])
-        if total_services != 1:
-            raise AssertionError(
-                "When specifying a run mode other than BATCH, "
-                "only one service may be run in run_sim_services."
-            )
+    if driver_in_run_list and external_driver_addresses:
+        raise RuntimeError(
+            "Driver service is listed in `wizard.run_sim_services`, but "
+            "`wizard.external_services.driver` is also configured. Remove the "
+            "driver service or the external driver addresses."
+        )
 
 
 def update_scene_config(cfg: AlpasimConfig) -> None:

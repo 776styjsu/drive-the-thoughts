@@ -7,30 +7,52 @@ TelemetryContext for runtime metrics collection using Prometheus.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import logging
-import os
+import threading
 from contextvars import ContextVar
 from dataclasses import dataclass, field
-from pathlib import Path
+from time import perf_counter
 from types import TracebackType
-from typing import Generator, Type
+from typing import Callable, Type
+from wsgiref.simple_server import WSGIServer
 
 from alpasim_runtime.event_loop_idle_profiler import get_event_loop_idle_stats
 from alpasim_runtime.gc_pressure_profiler import get_gc_pressure_stats
-from prometheus_client import CollectorRegistry, Gauge, Histogram, write_to_textfile
-
-from .resources import ResourceSampler
+from prometheus_client import (
+    CollectorRegistry,
+    Counter,
+    Gauge,
+    Histogram,
+    start_http_server,
+)
 
 logger = logging.getLogger(__name__)
 
+WORKER_LABELS = ("worker_id",)
+
 # Histogram bucket definitions (centralized)
 HISTOGRAM_BUCKETS = {
-    "rpc_duration": (0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 5.0, 10.0),
+    "rpc_duration": (0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0),
     "rpc_blocking": (0.0001, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0),
-    "rpc_queue_depth": [0, 1, 2, 3, 5, 7, 10, 15, 20, 25, 30, 35, 50],
-    "rollout_duration": list(range(1, 300)),
-    "step_duration": (0.1, 0.5, 1, 2, 5, 10, 30),
+    "rollout_duration": (1, 2.5, 5, 10, 25, 50, 100, 250, 500),
+    "step_duration": (0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30),
+    "observation_barrier": (
+        0.001,
+        0.005,
+        0.01,
+        0.025,
+        0.05,
+        0.1,
+        0.25,
+        0.5,
+        1,
+        2.5,
+        5,
+        10,
+    ),
+    "scheduler_wait": (0.01, 0.1, 0.5, 1, 2.5, 5, 10, 30, 60, 120, 300),
 }
 
 
@@ -41,162 +63,287 @@ class TelemetryContext:
 
     Use as a context manager for automatic setup/shutdown:
 
-        async with TelemetryContext(output_dir, worker_id) as ctx:
+        async with TelemetryContext(port=port, worker_id=worker_id) as ctx:
             # ctx.metrics available here
             await run_simulation()
-        # Metrics automatically written on exit
-
-    Resource sampling: Make sure to only sample resources
-    (i.e. sample_resources=True) for one process in the simulation.
     """
 
-    output_dir: str
+    port: int
     worker_id: int = 0
-    sample_resources: bool = False
-    resource_sample_interval: float = 1.0
+    bind_host: str = "0.0.0.0"
+    refresh_interval_s: float = 1.0
+    job_queue_depth_fn: Callable[[], int] | None = None
 
     # Metrics (initialized in __post_init__)
     registry: CollectorRegistry = field(init=False)
-    rpc_duration: Histogram = field(init=False)
-    rpc_blocking: Histogram = field(init=False)
-    rpc_queue_depth: Histogram = field(init=False)
-    rollout_duration: Histogram = field(init=False)
-    step_duration: Histogram = field(init=False)
+    _rpc_duration: Histogram = field(init=False)
+    _rpc_blocking: Histogram = field(init=False)
+    _rpc_queue_depth_latest: Gauge = field(init=False)
+    _rollout_duration: Histogram = field(init=False)
+    _step_duration: Histogram = field(init=False)
+    _observation_barrier: Histogram = field(init=False)
 
-    # Note that because we don't have an active Prometheus server,
-    # Gauges are only set once at the end of the simulation.
-    # Simulation summary gauges
-    simulation_total_seconds: Gauge = field(init=False)
-    simulation_rollout_count: Gauge = field(init=False)
-    simulation_seconds_per_rollout: Gauge = field(init=False)
+    # Simulation summary metrics
+    _rollouts: Counter = field(init=False)
+    _renderer_active_rollouts: Gauge = field(init=False)
+    _renderer_rollouts_started: Counter = field(init=False)
+    _renderer_scheduler_wait: Histogram = field(init=False)
+    _simulation_elapsed_seconds: Gauge = field(init=False)
+    _job_queue_depth: Gauge = field(init=False)
 
     # Event loop gauges
-    event_loop_idle_seconds: Gauge = field(init=False)
-    event_loop_poll_seconds: Gauge = field(init=False)
-    event_loop_work_seconds: Gauge = field(init=False)
+    _event_loop_idle_seconds: Gauge = field(init=False)
+    _event_loop_poll_seconds: Gauge = field(init=False)
+    _event_loop_work_seconds: Gauge = field(init=False)
 
     # GC pressure gauges
-    gc_total_duration_seconds: Gauge = field(init=False)
-    gc_max_duration_seconds: Gauge = field(init=False)
-    gc_collection_count: Gauge = field(init=False)
+    _gc_total_duration_seconds: Gauge = field(init=False)
+    _gc_max_duration_seconds: Gauge = field(init=False)
+    _gc_collection_count: Gauge = field(init=False)
 
-    # Resource sampler (owned by context)
-    _resource_sampler: ResourceSampler | None = field(init=False, default=None)
+    _httpd: WSGIServer | None = field(init=False, default=None)
+    _http_thread: threading.Thread | None = field(init=False, default=None)
+    _refresh_task: asyncio.Task[None] | None = field(init=False, default=None)
+    _simulation_started_at: float | None = field(init=False, default=None)
 
     def __post_init__(self) -> None:
-        os.makedirs(self.output_dir, exist_ok=True)
         self.registry = CollectorRegistry()
+        worker_labels = {"worker_id": str(self.worker_id)}
 
-        # RPC metrics (tag label allows filtering warmup/special operations)
-        self.rpc_duration = Histogram(
-            "rpc_duration_seconds",
+        def worker_gauge(name: str, description: str) -> Gauge:
+            return Gauge(
+                name, description, WORKER_LABELS, registry=self.registry
+            ).labels(**worker_labels)
+
+        # RPC metrics
+        self._rpc_duration = Histogram(
+            "alpasim_rpc_duration_seconds",
             "RPC call duration",
-            ["service", "method", "tag"],
+            ["service", "method", *WORKER_LABELS],
             buckets=HISTOGRAM_BUCKETS["rpc_duration"],
             registry=self.registry,
         )
-        self.rpc_blocking = Histogram(
-            "rpc_blocking_seconds",
+        self._rpc_blocking = Histogram(
+            "alpasim_rpc_blocking_seconds",
             "Time between gRPC I/O completion and coroutine resumption",
-            ["service", "method", "tag"],
+            ["service", "method", *WORKER_LABELS],
             buckets=HISTOGRAM_BUCKETS["rpc_blocking"],
             registry=self.registry,
         )
-        self.rpc_queue_depth = Histogram(
-            "rpc_queue_depth_at_start",
-            "Queue depth when RPC was initiated",
-            ["service", "tag"],
-            buckets=HISTOGRAM_BUCKETS["rpc_queue_depth"],
+        self._rpc_queue_depth_latest = Gauge(
+            "alpasim_rpc_queue_depth_at_start_latest",
+            "Latest observed queue depth when an RPC was initiated",
+            ["service", *WORKER_LABELS],
             registry=self.registry,
         )
 
         # Simulation timing
-        self.rollout_duration = Histogram(
-            "rollout_duration_seconds",
+        self._rollout_duration = Histogram(
+            "alpasim_rollout_duration_seconds",
             "Total rollout execution time",
-            [],
+            WORKER_LABELS,
             buckets=HISTOGRAM_BUCKETS["rollout_duration"],
             registry=self.registry,
-        )
-        self.step_duration = Histogram(
-            "step_duration_seconds",
+        ).labels(**worker_labels)
+        self._step_duration = Histogram(
+            "alpasim_step_duration_seconds",
             "Per-step execution time",
-            [],
+            WORKER_LABELS,
             buckets=HISTOGRAM_BUCKETS["step_duration"],
             registry=self.registry,
-        )
+        ).labels(**worker_labels)
+        self._observation_barrier = Histogram(
+            "alpasim_observation_barrier_seconds",
+            "Wall time awaiting the pre-drive observation barrier",
+            WORKER_LABELS,
+            buckets=HISTOGRAM_BUCKETS["observation_barrier"],
+            registry=self.registry,
+        ).labels(**worker_labels)
 
-        # Pre-register simulation summary gauges
-        self.simulation_total_seconds = Gauge(
-            "simulation_total_seconds",
-            "Total simulation time",
+        # Pre-register simulation summary metrics
+        self._rollouts = Counter(
+            "alpasim_rollouts",
+            "Number of rollouts reaching a terminal status",
             registry=self.registry,
+            labelnames=["status", *WORKER_LABELS],
         )
-        self.simulation_rollout_count = Gauge(
-            "simulation_rollout_count",
-            "Number of rollouts",
-            registry=self.registry,
+        self._renderer_active_rollouts = worker_gauge(
+            "alpasim_renderer_active_rollouts",
+            "Renderer-backed rollouts currently executing",
         )
-        self.simulation_seconds_per_rollout = Gauge(
-            "simulation_seconds_per_rollout",
-            "Average time per rollout",
+        self._renderer_rollouts_started = Counter(
+            "alpasim_renderer_rollouts_started",
+            "Renderer-backed rollouts started by scheduling decision",
             registry=self.registry,
+            labelnames=[
+                "kind",
+                *WORKER_LABELS,
+            ],
+        )
+        self._renderer_scheduler_wait = Histogram(
+            "alpasim_renderer_scheduler_wait_seconds",
+            "Time a renderer-backed rollout waited for scheduler assignment",
+            registry=self.registry,
+            labelnames=["kind", *WORKER_LABELS],
+            buckets=HISTOGRAM_BUCKETS["scheduler_wait"],
+        )
+        self._simulation_elapsed_seconds = worker_gauge(
+            "alpasim_simulation_elapsed_seconds",
+            "Simulation worker elapsed time sampled when rollouts finish",
+        )
+        self._job_queue_depth = worker_gauge(
+            "alpasim_job_queue_depth",
+            "Runtime rollout jobs waiting for a worker",
         )
 
         # Pre-register event loop gauges
-        self.event_loop_idle_seconds = Gauge(
-            "event_loop_idle_seconds_total",
+        self._event_loop_idle_seconds = worker_gauge(
+            "alpasim_event_loop_idle_seconds_total",
             "Total event loop idle time (blocking waits for I/O)",
-            registry=self.registry,
         )
-        self.event_loop_poll_seconds = Gauge(
-            "event_loop_poll_seconds_total",
+        self._event_loop_poll_seconds = worker_gauge(
+            "alpasim_event_loop_poll_seconds_total",
             "Total event loop poll time (non-blocking I/O checks)",
-            registry=self.registry,
         )
-        self.event_loop_work_seconds = Gauge(
-            "event_loop_work_seconds_total",
+        self._event_loop_work_seconds = worker_gauge(
+            "alpasim_event_loop_work_seconds_total",
             "Total event loop work time (executing Python code)",
-            registry=self.registry,
         )
 
         # GC pressure gauges
-        self.gc_total_duration_seconds = Gauge(
-            "gc_total_duration_seconds",
+        self._gc_total_duration_seconds = worker_gauge(
+            "alpasim_gc_total_duration_seconds",
             "Total time spent in garbage collection",
-            registry=self.registry,
         )
-        self.gc_max_duration_seconds = Gauge(
-            "gc_max_duration_seconds",
+        self._gc_max_duration_seconds = worker_gauge(
+            "alpasim_gc_max_duration_seconds",
             "Longest single garbage collection pause",
-            registry=self.registry,
         )
-        self.gc_collection_count = Gauge(
-            "gc_collection_count_total",
+        self._gc_collection_count = worker_gauge(
+            "alpasim_gc_collection_count_total",
             "Total number of GC collections",
-            registry=self.registry,
         )
 
-    def record_simulation_summary(
-        self, total_seconds: float, rollout_count: int
+    def record_rpc(
+        self,
+        *,
+        service: str,
+        method: str,
+        queue_depth_at_start: int,
+        duration_seconds: float,
+        blocking_seconds: float | None,
     ) -> None:
-        """Record simulation summary metrics (called once at end of run)."""
-        self.simulation_total_seconds.set(total_seconds)
-        self.simulation_rollout_count.set(rollout_count)
-        if rollout_count > 0:
-            self.simulation_seconds_per_rollout.set(total_seconds / rollout_count)
+        """Record duration and queue depth for one RPC attempt."""
+        worker_id = str(self.worker_id)
+        self._rpc_queue_depth_latest.labels(service=service, worker_id=worker_id).set(
+            queue_depth_at_start
+        )
+        self._rpc_duration.labels(
+            service=service,
+            method=method,
+            worker_id=worker_id,
+        ).observe(duration_seconds)
+        if blocking_seconds is not None:
+            self._rpc_blocking.labels(
+                service=service,
+                method=method,
+                worker_id=worker_id,
+            ).observe(blocking_seconds)
 
-    def shutdown(self) -> None:
-        """Dump all metrics to file."""
-        prom_path = Path(self.output_dir) / f"metrics_worker_{self.worker_id}.prom"
-        write_to_textfile(str(prom_path), self.registry)
-        logger.info(f"Metrics written to {prom_path}")
+    def record_rollout_duration(self, duration_seconds: float) -> None:
+        """Record one rollout's wall-clock duration."""
+        self._rollout_duration.observe(duration_seconds)
+
+    def record_step_duration(self, duration_seconds: float) -> None:
+        """Record one simulation step's wall-clock duration."""
+        self._step_duration.observe(duration_seconds)
+
+    def record_observation_barrier(self, duration_seconds: float) -> None:
+        """Record one wait at the pre-drive observation barrier."""
+        self._observation_barrier.observe(duration_seconds)
+
+    def record_rollout_finished(self, status: str) -> None:
+        """Record one terminal rollout status in the live simulation summary."""
+        self._rollouts.labels(
+            status=status,
+            worker_id=str(self.worker_id),
+        ).inc()
+        if self._simulation_started_at is not None:
+            self._simulation_elapsed_seconds.set(
+                perf_counter() - self._simulation_started_at
+            )
+
+    def record_renderer_rollout_started(
+        self,
+        *,
+        dispatch_kind: str,
+        scheduler_wait_seconds: float,
+    ) -> None:
+        """Record the scheduling class and begin active-rollout accounting."""
+        self._renderer_rollouts_started.labels(
+            kind=dispatch_kind,
+            worker_id=str(self.worker_id),
+        ).inc()
+        self._renderer_scheduler_wait.labels(
+            kind=dispatch_kind,
+            worker_id=str(self.worker_id),
+        ).observe(scheduler_wait_seconds)
+        self._renderer_active_rollouts.inc()
+
+    def record_renderer_rollout_stopped(self) -> None:
+        """Finish active-rollout accounting."""
+        self._renderer_active_rollouts.dec()
+
+    def refresh_gauges(self) -> None:
+        """Refresh live gauge snapshots for Prometheus scrapes."""
+        self._refresh_event_loop_gauges()
+        self._refresh_gc_pressure_gauges()
+        if self.job_queue_depth_fn is not None:
+            self._job_queue_depth.set(self.job_queue_depth_fn())
+
+    def _refresh_event_loop_gauges(self) -> None:
+        idle_stats = get_event_loop_idle_stats()
+        self._event_loop_idle_seconds.set(idle_stats["idle_seconds"])
+        self._event_loop_poll_seconds.set(idle_stats["poll_seconds"])
+        self._event_loop_work_seconds.set(idle_stats["work_seconds"])
+
+    def _refresh_gc_pressure_gauges(self) -> None:
+        gc_stats = get_gc_pressure_stats()
+        self._gc_total_duration_seconds.set(gc_stats["total_duration_s"])
+        self._gc_max_duration_seconds.set(gc_stats["max_duration_s"])
+        self._gc_collection_count.set(gc_stats["collection_count"])
+
+    async def _refresh_gauges_periodically(self) -> None:
+        while True:
+            self.refresh_gauges()
+            await asyncio.sleep(self.refresh_interval_s)
 
     async def __aenter__(self) -> "TelemetryContext":
+        try:
+            self._httpd, self._http_thread = start_http_server(
+                self.port,
+                addr=self.bind_host,
+                registry=self.registry,
+            )
+            logger.info(
+                "Worker %d metrics endpoint listening on %s:%d",
+                self.worker_id,
+                self.bind_host,
+                self.port,
+            )
+            self._simulation_started_at = perf_counter()
+            self.refresh_gauges()
+            self._refresh_task = asyncio.create_task(
+                self._refresh_gauges_periodically()
+            )
+        except BaseException:
+            if self._httpd is not None:
+                self._httpd.shutdown()
+                self._httpd.server_close()
+            self._httpd = None
+            self._http_thread = None
+            raise
         _current_context.set(self)
-        if self.sample_resources:
-            self._resource_sampler = ResourceSampler()
-            await self._resource_sampler.start(self.resource_sample_interval)
         return self
 
     async def __aexit__(
@@ -205,24 +352,21 @@ class TelemetryContext:
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
     ) -> None:
-        if self._resource_sampler:
-            await self._resource_sampler.stop()
-            self._resource_sampler.export_to(self.registry)
+        if self._refresh_task is not None:
+            self._refresh_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._refresh_task
+            self._refresh_task = None
 
-        # Record event loop stats
-        idle_stats = get_event_loop_idle_stats()
-        self.event_loop_idle_seconds.set(idle_stats["idle_seconds"])
-        self.event_loop_poll_seconds.set(idle_stats["poll_seconds"])
-        self.event_loop_work_seconds.set(idle_stats["work_seconds"])
-
-        # Record GC pressure stats
-        gc_stats = get_gc_pressure_stats()
-        self.gc_total_duration_seconds.set(gc_stats["total_duration_s"])
-        self.gc_max_duration_seconds.set(gc_stats["max_duration_s"])
-        self.gc_collection_count.set(gc_stats["collection_count"])
-
-        self.shutdown()
-        _current_context.set(None)
+        try:
+            self.refresh_gauges()
+        finally:
+            if self._httpd is not None:
+                self._httpd.shutdown()
+                self._httpd.server_close()
+                self._httpd = None
+                self._http_thread = None
+            _current_context.set(None)
 
 
 # Task-local context using ContextVar (async-safe)
@@ -247,32 +391,3 @@ def try_get_context() -> TelemetryContext | None:
     Use when telemetry is optional, e.g. for functions that might be in tests.
     """
     return _current_context.get()
-
-
-# Task-local tag for labeling telemetry samples (e.g., "warmup")
-_current_tag: ContextVar[str] = ContextVar("telemetry_tag", default="default")
-
-
-def get_telemetry_tag() -> str:
-    """Get current telemetry tag."""
-    return _current_tag.get()
-
-
-@contextlib.contextmanager
-def tag_telemetry(tag: str) -> Generator[None, None, None]:
-    """
-    Context manager to tag telemetry samples with a label.
-
-    Tagged samples are still recorded but can be filtered in analysis.
-    Use this for operations like warmup that should be tracked separately.
-
-    Example:
-        with tag_telemetry("warmup"):
-            await some_warmup_operation()  # Recorded with tag="warmup"
-    """
-    old_tag = _current_tag.get()
-    _current_tag.set(tag)
-    try:
-        yield
-    finally:
-        _current_tag.set(old_tag)

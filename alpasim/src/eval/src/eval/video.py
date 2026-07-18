@@ -478,7 +478,8 @@ def create_video_animation(
         if len(overlay_frame_matches) == 0:
             logger.info(
                 "Driver response timestamps do not align with rendered frames; "
-                "camera overlay will be empty."
+                "camera overlay will hold the most recent response after the "
+                "first response is available."
             )
 
     if should_render_table:
@@ -503,7 +504,7 @@ def create_video_animation(
 
     # Get initial command name from driver response
     initial_driver_response = sim_result.driver_responses.get_driver_response_for_time(
-        timestamps_us[0], which_time="now"
+        timestamps_us[0], which_time="now", fallback="previous"
     )
     initial_command = (
         initial_driver_response.command_name
@@ -541,6 +542,14 @@ def create_video_animation(
     # Outer key: name of the element to plot
     # Inner key: name of the element artists to plot (e.g. border and fill)
     artists_on_map: dict[str, dict[str, list[plt.Artist]]] = {}
+    show_agent_ids = (
+        cfg.video.map_video.map_elements_to_plot is None
+        or MapElements.AGENT_IDS in cfg.video.map_video.map_elements_to_plot
+    )
+    show_traffic_predictions = (
+        cfg.video.map_video.map_elements_to_plot is None
+        or MapElements.TRAFFIC_PREDICTIONS in cfg.video.map_video.map_elements_to_plot
+    )
 
     artists_on_map["map"] = shapely_map.render(
         axs["map"],
@@ -571,12 +580,14 @@ def create_video_animation(
             timestamps_us[0],
             center=image_center_xy,
             max_dist=cfg.video.map_video.map_radius_m + 10,
+            show_labels=show_agent_ids,
         )
     else:
         artists_on_map["agent_artists"] = sim_result.actor_polygons.render_at_time(
             axs["map"],
             timestamps_us[0],
             only_agents=["EGO"],
+            show_labels=False,
         )
 
     if (
@@ -584,7 +595,7 @@ def create_video_animation(
         or MapElements.DRIVER_RESPONSES in cfg.video.map_video.map_elements_to_plot
     ):
         artists_on_map["driver_responses"] = sim_result.driver_responses.render_at_time(
-            axs["map"], timestamps_us[0], "now"
+            axs["map"], timestamps_us[0], "now", fallback="previous"
         )
 
     if (
@@ -594,6 +605,14 @@ def create_video_animation(
         artists_on_map["route"] = sim_result.routes.render_at_time(
             axs["map"],
             timestamps_us[0],
+        )
+
+    if show_traffic_predictions:
+        artists_on_map["traffic_predictions"] = (
+            sim_result.traffic_predictions.render_at_time(
+                axs["map"],
+                timestamps_us[0],
+            )
         )
 
     if (
@@ -639,7 +658,9 @@ def create_video_animation(
             or MapElements.DRIVER_RESPONSES in cfg.video.map_video.map_elements_to_plot
         ):
             artists_on_map["driver_responses"] = (
-                sim_result.driver_responses.render_at_time(axs["map"], time, "now")
+                sim_result.driver_responses.render_at_time(
+                    axs["map"], time, "now", fallback="previous"
+                )
             )
 
         if (
@@ -649,6 +670,14 @@ def create_video_animation(
             artists_on_map["route"] = sim_result.routes.render_at_time(
                 axs["map"],
                 time,
+            )
+
+        if show_traffic_predictions:
+            artists_on_map["traffic_predictions"] = (
+                sim_result.traffic_predictions.render_at_time(
+                    axs["map"],
+                    time,
+                )
             )
 
         if (
@@ -671,12 +700,14 @@ def create_video_animation(
                 time,
                 center=image_center_xy,
                 max_dist=cfg.video.map_video.map_radius_m + 10,
+                show_labels=show_agent_ids,
             )
         else:
             artists_on_map["agent_artists"] = sim_result.actor_polygons.render_at_time(
                 axs["map"],
                 time,
                 only_agents=["EGO"],
+                show_labels=False,
             )
 
         for artist in _list_in_dict_in_dict_to_list(artists_on_map):
@@ -686,7 +717,7 @@ def create_video_animation(
 
         # Update command text from driver response
         driver_response = sim_result.driver_responses.get_driver_response_for_time(
-            time, which_time="now"
+            time, which_time="now", fallback="previous"
         )
         command_name = (
             driver_response.command_name
@@ -706,6 +737,7 @@ def create_video_animation(
                 camera_projector,
                 time,
                 which_time="now",
+                fallback="previous",
             )
             overlay_artists.extend(
                 sim_result.routes.render_on_camera(

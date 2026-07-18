@@ -49,6 +49,7 @@ SERVICE_VERSION_MAP = {
     "controller": "controller_version",
     "sensorsim": "sensorsim_version",
     "runtime": "runtime_version",
+    "video_model": "video_model_version",
 }
 
 
@@ -209,6 +210,23 @@ SERVICE_EXCHANGES = {
             method="get_available_ego_masks",
             request_entry="available_ego_masks_request",
             response="available_ego_masks_return",
+        ),
+    ],
+    "video_model": [
+        ExchangeConfig(
+            method="start_session",
+            request_entry="video_model_session_request",
+            response="video_model_session_id",
+        ),
+        ExchangeConfig(
+            method="close_session",
+            request_entry="video_model_session_close_request",
+            response=None,
+        ),
+        ExchangeConfig(
+            method="render_video_chunk",
+            request_entry="video_model_chunk_request",
+            response="video_model_chunk_return",
         ),
     ],
 }

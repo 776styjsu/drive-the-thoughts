@@ -8,8 +8,10 @@ Inter Process Communication (IPC) message types and helpers for worker pool comm
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from multiprocessing import Queue
+from time import monotonic
+from typing import Literal
 
 from alpasim_grpc.v0.logging_pb2 import RolloutMetadata
 from alpasim_runtime.address_pool import ServiceAddress
@@ -20,13 +22,20 @@ from eval.schema import EvalConfig
 
 logger = logging.getLogger(__name__)
 
+DispatchKind = Literal[
+    "fifo",
+    "cached_affine",
+    "cold_initial",
+    "cold_replica",
+]
+
 
 @dataclass
 class ServiceEndpoints:
     """Concrete service addresses assigned to a single job."""
 
     driver: ServiceAddress
-    sensorsim: ServiceAddress
+    renderer: ServiceAddress
     physics: ServiceAddress
     trafficsim: ServiceAddress
     controller: ServiceAddress
@@ -34,16 +43,25 @@ class ServiceEndpoints:
 
 @dataclass
 class PendingRolloutJob:
-    """Job created by parent before service assignment."""
+    """Job created by parent before service assignment.
 
+    Parent-side only; never crosses the worker queue (see AssignedRolloutJob).
+    """
+
+    # Request identifier for daemon-mode routing and batch compatibility.
+    request_id: str
     # Unique identifier for tracking this job in results and logs
     job_id: str
     # Scene ID identifying which scene to simulate
     scene_id: str
     # Index of rollout spec in SimulationRequest.rollout_specs
     rollout_spec_index: int
-    # Artifact source path for this job's scene.
-    artifact_path: str
+    # Optional; empty ⇒ runtime generates the UUID. See RolloutSpec in runtime.proto.
+    session_uuid: str = ""
+    # Number of failed attempts before this pending attempt.
+    retry_attempt: int = 0
+    # Creation time (monotonic clock); basis for scheduler-wait telemetry.
+    enqueued_at: float = field(default_factory=monotonic)
 
 
 @dataclass
@@ -58,10 +76,13 @@ class AssignedRolloutJob:
     scene_id: str
     # Index of rollout spec in SimulationRequest.rollout_specs
     rollout_spec_index: int
-    # Artifact source path for this job's scene.
-    artifact_path: str
     # Concrete service addresses assigned by the parent dispatch loop.
     endpoints: ServiceEndpoints
+    # Bounded scheduler decision metadata for worker-side telemetry.
+    dispatch_kind: DispatchKind
+    scheduler_wait_seconds: float
+    # Optional; empty ⇒ runtime generates the UUID. See RolloutSpec in runtime.proto.
+    session_uuid: str = ""
 
 
 @dataclass
@@ -77,6 +98,7 @@ class JobResult:
     error: str | None
     error_traceback: str | None  # Full traceback for debugging
     rollout_uuid: str | None
+    error_code: int = 0
     # Evaluation metrics from in-runtime evaluation (if enabled).
     # Contains timestep_metrics, aggregated_metrics, and metrics_df.
     # None if evaluation is disabled or failed.
@@ -106,6 +128,7 @@ class WorkerArgs:
     )
     log_dir: str  # Root directory for outputs (asl/, metrics/, txt-logs/)
     eval_config: EvalConfig
+    telemetry_port: int  # Port for this worker's Prometheus metrics endpoint
     # Canonical version IDs computed once by the parent process.
     version_ids: RolloutMetadata.VersionIds | None = None
     # For orphan detection in subprocess mode. None disables detection (inline mode).

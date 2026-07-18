@@ -381,7 +381,10 @@ class TestPolicyEventResamplingLoop:
         simple_trajectory: Trajectory,
     ):
         monitor = _StubMonitor([], do_monitor=False)
-        mock_driver.drive.return_value = simple_trajectory.clip(200_000, 300_001)
+        mock_driver.drive.return_value = (
+            simple_trajectory.clip(200_000, 300_001),
+            False,
+        )
         event = _policy_event(service_bundle, monitor)
 
         await event.run(rollout_state, EventQueue())

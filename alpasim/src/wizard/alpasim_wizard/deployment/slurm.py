@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shlex
 import socket
 import time
 from pathlib import Path
@@ -37,12 +38,68 @@ class SlurmDeployment:
         """Deploy simulation services (including runtime) on SLURM."""
         logger.info("Running simulation services")
         containers_to_start_last = (
-            self.container_set.runtime if self.container_set.runtime else []
+            [self.container_set.runtime] if self.container_set.runtime else []
         )
-        self.deploy(
-            containers=self.container_set.sim,
-            containers_to_start_last=containers_to_start_last,
+        containers = list(self.container_set.sim)
+        containers.append(self.container_set.prometheus)
+        if self.context.cfg.wizard.enable_mps:
+            self._start_mps_daemon()
+        try:
+            self.deploy(
+                containers=containers,
+                containers_to_start_last=containers_to_start_last,
+            )
+        finally:
+            if self.context.cfg.wizard.enable_mps:
+                self._stop_mps_daemon()
+
+    def _mps_pipe_dir(self) -> str:
+        """Job-scoped CUDA MPS pipe directory.
+
+        Lives under /tmp rather than the run log dir because Unix socket paths
+        are capped at ~108 characters, which Lustre log paths exceed. Scoped by
+        job id so daemons of jobs sharing a node cannot collide.
+        """
+        return f"/tmp/nvidia-mps-{self.context.cfg.wizard.slurm_job_id}"
+
+    def _start_mps_daemon(self) -> None:
+        """Start the CUDA MPS control daemon on the host for this job."""
+        cfg = self.context.cfg.wizard
+        pipe_dir = self._mps_pipe_dir()
+        mps_log_dir = f"{cfg.log_dir}/mps"
+        # Remove a stale pipe dir (e.g. from a requeued job) so the daemon
+        # does not fail on leftover sockets.
+        dispatch_command(
+            f"rm -rf {pipe_dir} && mkdir -p {pipe_dir} {mps_log_dir} && "
+            f"CUDA_MPS_PIPE_DIRECTORY={pipe_dir} CUDA_MPS_LOG_DIRECTORY={mps_log_dir} "
+            "nvidia-cuda-mps-control -d",
+            log_dir=Path(cfg.log_dir),
+            dry_run=cfg.dry_run,
+            blocking=True,
         )
+
+    def _stop_mps_daemon(self) -> None:
+        """Stop the CUDA MPS control daemon and remove its pipe directory."""
+        cfg = self.context.cfg.wizard
+        pipe_dir = self._mps_pipe_dir()
+        try:
+            try:
+                dispatch_command(
+                    f"echo quit | CUDA_MPS_PIPE_DIRECTORY={pipe_dir} "
+                    "nvidia-cuda-mps-control",
+                    log_dir=Path(cfg.log_dir),
+                    dry_run=cfg.dry_run,
+                    blocking=True,
+                )
+            finally:
+                dispatch_command(
+                    f"rm -rf {pipe_dir}",
+                    log_dir=Path(cfg.log_dir),
+                    dry_run=cfg.dry_run,
+                    blocking=True,
+                )
+        except Exception as e:
+            logger.warning("Failed to stop MPS daemon: %s", e)
 
     def deploy(
         self,
@@ -50,6 +107,7 @@ class SlurmDeployment:
         containers_to_start_last: List[Any] | None = None,
     ) -> None:
         """Deploy containers using SLURM."""
+        launched_containers: list[ContainerDefinition] = []
         if containers_to_start_last:
             assert (
                 self.context.cfg.wizard.timeout is not None
@@ -91,6 +149,7 @@ class SlurmDeployment:
                     dry_run=self.context.cfg.wizard.dry_run,
                     blocking=False,
                 )
+                launched_containers.append(c)
 
             # Wait for containers if needed
             if _wait_for_containers_running():
@@ -102,16 +161,54 @@ class SlurmDeployment:
 
         # Deploy containers that should start last
         if containers_to_start_last:
-            for c in containers_to_start_last:
+            try:
+                for c in containers_to_start_last:
+                    dispatch_command(
+                        self._get_slurm_dispatch_command(
+                            c,
+                            self.context.cfg.wizard.run_mode.name,
+                        ),
+                        log_dir=Path(self.context.cfg.wizard.log_dir),
+                        dry_run=self.context.cfg.wizard.dry_run,
+                        blocking=True,
+                    )
+            finally:
+                self._cleanup_launched_service_steps(launched_containers)
+
+    def _cleanup_launched_service_steps(
+        self, containers: list[ContainerDefinition]
+    ) -> None:
+        """Cancel non-runtime service steps after the blocking runtime exits."""
+        if self.context.cfg.wizard.dry_run:
+            return
+
+        seen_step_names: set[str] = set()
+        for container in containers:
+            step_name = self._get_slurm_step_name(container)
+            if step_name in seen_step_names:
+                continue
+            seen_step_names.add(step_name)
+            try:
                 dispatch_command(
-                    self._get_slurm_dispatch_command(
-                        c,
-                        self.context.cfg.wizard.run_mode.name,
-                    ),
+                    self._get_slurm_cleanup_command(container),
                     log_dir=Path(self.context.cfg.wizard.log_dir),
-                    dry_run=self.context.cfg.wizard.dry_run,
+                    dry_run=False,
                     blocking=True,
                 )
+            except Exception as e:
+                logger.warning(
+                    "Failed to clean up SLURM step for %s: %s",
+                    container.uuid,
+                    e,
+                )
+
+    def _get_slurm_step_name(self, container: ContainerDefinition) -> str:
+        """Return a unique SLURM job-step name for a launched container."""
+        return f"alpasim-{self.context.cfg.wizard.slurm_job_id}-{container.uuid}"
+
+    def _get_slurm_cleanup_command(self, container: ContainerDefinition) -> str:
+        """Generate the host-side cleanup command for a launched service step."""
+        return f"scancel --signal=TERM --name={self._get_slurm_step_name(container)}"
 
     def _to_slurm_run(
         self,
@@ -122,7 +219,7 @@ class SlurmDeployment:
 
         Args:
             container: ContainerDefinition instance
-            mode: RunMode (BATCH, ATTACH_BASH, or ATTACH_VSCODE)
+            mode: RunMode (ONESHOT or SERVER)
 
         Returns:
             SLURM srun command string
@@ -132,9 +229,10 @@ class SlurmDeployment:
         ), "SLURM environment not detected"
         slurm_job_id = container.context.cfg.wizard.slurm_job_id
 
+        restart_count = os.environ.get("SLURM_RESTART_COUNT", "0")
         s_log = (
             f"{container.context.cfg.wizard.log_dir}/txt-logs/"
-            f"out-{slurm_job_id}-{container.uuid}-log.txt"
+            f"out-{slurm_job_id}-attempt-{restart_count}-{container.uuid}-log.txt"
         )
 
         sqsh = ensure_sqsh_path(
@@ -145,17 +243,23 @@ class SlurmDeployment:
         # Note that we cannot use --export=CUDA_VISIBLE_DEVICES=... with srun because SLURM
         # overrides CUDA_VISIBLE_DEVICES even when exported as an environment variable.
         # Instead we set it in the command line. Use export to allow chaining commands with &&.
-        s_gpu = f"export CUDA_VISIBLE_DEVICES={container.gpu};" if container.gpu else ""
-
+        mps_enabled = (
+            container.context.cfg.wizard.enable_mps and container.gpu is not None
+        )
+        s_gpu = ""
+        if container.gpu is not None:
+            s_gpu = f"export CUDA_VISIBLE_DEVICES={container.gpu};"
+        if mps_enabled:
+            s_gpu += f"export CUDA_MPS_PIPE_DIRECTORY={self._mps_pipe_dir()};"
         # Separate environment variables:
         #  - 'VAR=value' format to export in bash. The value will be logged, not secure for secrets.
         #  - 'VAR' format pass-through from host. The value will not be logged, secure for secrets.
         env_export_set = []  # VAR=value format
-        env_passthrough_set = []  # VAR only format
+        env_passthrough_set = ["SLURM_JOB_ID"]  # VAR only format
         for e in container.environments or []:
             if "=" in e:
                 env_export_set.append(e)
-            else:
+            elif e not in env_passthrough_set:
                 env_passthrough_set.append(e)
 
         # Construct environment variable arguments
@@ -165,12 +269,16 @@ class SlurmDeployment:
             if env_export_set
             else ""
         )
-        # Use --export for pass-through variables from host environment
-        s_env_passthrough = (
-            f"--export={','.join(env_passthrough_set)} " if env_passthrough_set else ""
-        )
+        # Slurm exports the submit environment by default. Keep container steps
+        # isolated, while preserving the job id needed for Slurm-scoped telemetry.
+        s_env_export_arg = f"--export={','.join(env_passthrough_set)} "
 
-        s_mnt = ",".join([v.to_str() for v in container.volumes])
+        mounts = [v.to_str() for v in container.volumes]
+        if mps_enabled:
+            # enroot containers have an isolated rootfs; the MPS pipe directory
+            # must be mounted explicitly for clients to reach the daemon.
+            mounts.append(f"{self._mps_pipe_dir()}:{self._mps_pipe_dir()}")
+        s_mnt = ",".join(mounts)
 
         # Pin child srun steps to the wizard's node so services are co-located
         # and reachable via localhost.  Without --nodelist, SLURM may schedule
@@ -180,6 +288,7 @@ class SlurmDeployment:
         current_node = os.environ.get("SLURMD_NODENAME") or socket.gethostname()
 
         cmd = r"srun --verbose --overlap "
+        cmd += f"--job-name={self._get_slurm_step_name(container)} "
         cmd += f"--nodes=1 --ntasks=1 --nodelist={current_node} "
         if container.context.cfg.wizard.slurm_cpu_bind_none:
             cmd += "--cpu-bind=none "
@@ -193,15 +302,12 @@ class SlurmDeployment:
         if not container.service_config.remap_root:
             cmd += " --no-container-remap-root "
 
-        escaped_command = container.command.replace("$$", r"\$")
+        expanded_command = container.command.replace("$$", "$")
+        bash_command = shlex.quote(f"{s_gpu}{s_env_exports}{expanded_command}")
 
-        if mode == RunMode.BATCH:
-            cmd += f"--output={s_log} --error={s_log} {s_env_passthrough}"
-            cmd += f'bash -c "{s_gpu}{s_env_exports}{escaped_command}"'
-        elif mode == RunMode.ATTACH_BASH:
-            cmd += "--pty bash"
-        elif mode == RunMode.ATTACH_VSCODE:
-            cmd += "/mnt/helper/launch-vscode-auto-port.sh"
+        if mode in (RunMode.ONESHOT, RunMode.SERVER):
+            cmd += f"--output={s_log} --error={s_log} {s_env_export_arg}"
+            cmd += f"bash -c {bash_command}"
         else:
             raise ValueError(f"Unknown run mode: {mode}")
         return cmd
@@ -253,7 +359,8 @@ class SlurmDeployment:
                     if timeout is not None and s_waited > timeout:
                         if raise_on_timeout:
                             raise TimeoutError(
-                                f"Address {service_instance.address} of {container.name} "
+                                f"Address {service_instance.address} of "
+                                f"{container.name} "
                                 "did not open in time"
                             )
                         else:

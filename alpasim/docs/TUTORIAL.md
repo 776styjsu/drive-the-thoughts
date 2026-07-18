@@ -18,7 +18,9 @@ AlpaSim consists of multiple networked microservices (renderer, physics simulati
 controller, driver, traffic simulation). The AlpaSim runtime requests observed video frames from the
 renderer and egomotion history from the controller, communicates with the physics microservice to
 constrain actors to the road surface, and provides the information to the driver, with the
-expectation of receiving driving decisions in return to close the loop.
+expectation of receiving driving decisions in return to close the loop. The default renderer uses
+NuRec, and the same `renderer` service interface can also be backed by OmniDreams through
+FlashDreams.
 
 This repository contains the implementations of a subset of the services needed to execute the
 simulation as well as config files and infra code necessary to bring the microservices up via
@@ -48,6 +50,8 @@ Let's start by executing a run with default settings.
 1. Run the wizard to create the necessary config files, download the scene (if necessary), and run a
    simulation: `uv run alpasim_wizard deploy=local topology=1gpu driver=vavam wizard.log_dir=$PWD/tutorial`. This will create a
    `tutorial/` directory with all necessary config files and run the simulation.
+1. Alternatively, to run with the catk traffic model enabled, run:
+   `uv run alpasim_wizard deploy=local topology=1gpu driver=vavam trafficsim=catk wizard.log_dir=$PWD/tutorial_catk`.
 
 ## Results structure
 
@@ -120,10 +124,18 @@ tutorial/
 ├── eval-config.yaml
 ├── generated-network-config.yaml
 ├── generated-user-config-0.yaml
-├── metrics
+├── metrics_plot.png
+├── prometheus
+│   ├── data
+│   ├── process-exporter.yml
+│   ├── prometheus.yml
+│   ├── rules
+│   │   └── alpasim-recording-rules.yml
+│   └── targets
+│       └── alpasim.json
 ├── run_metadata.yaml
 ├── run.sh
-├── trafficsim-config.yaml
+├── trafficsim-config.yaml  # optional
 ├── txt-logs
 ├── wizard-config-loadable.yaml
 └── wizard-config.yaml
@@ -151,18 +163,24 @@ Some noteworthy files and directories:
   - `metrics_results.png` - Visual summary of driving quality metrics
   - `metrics_unprocessed.parquet` - Combined metrics from all rollouts
   - `videos/` - Videos organized by violation type (collision_at_fault, offroad, etc.)
-* `metrics/` contains performance profiling data (see
-  [OPERATIONS.md](OPERATIONS.md#how-do-i-view-performance-metrics) for details):
-  - `metrics.prom` - Prometheus metrics from simulation
-  - `metrics_plot.png` - Performance visualization (CPU/GPU/RPC metrics)
+* `prometheus/` contains performance telemetry data and Prometheus config:
+  - `prometheus/data/` - local Prometheus TSDB for the run
+  - `prometheus/prometheus.yml` - generated local Prometheus scrape config
+  - `prometheus/targets/alpasim.json` - generated file-SD targets
+  - `prometheus/rules/alpasim-recording-rules.yml` - generated recording rules for common
+    runtime dashboard queries
+  - `prometheus/process-exporter.yml` - generated process grouping config
+* `metrics_plot.png` is the automatically generated performance visualization (CPU/GPU/RPC
+  metrics). See [Performance telemetry](TELEMETRY.md) to inspect live or persisted metrics with
+  Prometheus and Grafana.
 * `driver` is a directory with logs written by the driver service, useful to debug policy-internal
   problems.
 * `wizard-config.yaml` contains the config the wizard used for this run **after applying the
   inheritance of hydra**. This is useful for debugging configuration issues.
 * `generated-user-config-{ARRAY_ID}.yaml` contains an expanded version of the simulation config
   provided by the user, possibly split into chunks when simulating on multiple nodes.
-* `trafficsim-config.yaml`. A copy of the traffic simulation config used for simulation, useful for
-  debugging traffic simulation.
+* `trafficsim-config.yaml` is present only for traffic backends that consume a wizard-generated
+  backend config. It is useful for debugging backend settings.
 * `generated-network-config.yaml` describes which services listen on which ports during simulation.
   Not useful unless debugging the simulator itself.
 
@@ -180,19 +198,41 @@ something goes wrong. When an error happens (for example the `rollouts` director
 it's best to consult that log to see where the first errors occurred. The microservices may produce
 additional logs that can be useful for debugging, but that is not covered here.
 
-
 ### Configuration axes
 
 The wizard requires three config groups:
 
 | Group | Purpose | Examples |
 |-------|---------|----------|
-| `deploy=` | Where to run (filesystem paths, SLURM vs Docker) | `local`, `local_external_driver` |
+| `deploy=` | Where to run (filesystem paths, SLURM vs Docker) | `local`, `docker_build_only` |
 | `topology=` | How many GPUs, replicas, and workers | `1gpu`, `2gpu`, `8gpu_64rollouts` |
 | `driver=` | Which driving model to use | `vavam`, `alpamayo1`, `alpamayo1_5`, `manual` |
+| `driver_source=` | Optional non-managed driver source | `external_static`, `external_dynamic` |
+
+By default, the wizard launches and owns the configured driver service. Use
+`driver_source=` only when the driver process is provided externally.
 
 Additionally, service-specific config groups can override the default images and launch behavior,
 for example `physics=disabled`.
+
+### Renderer options
+
+The tutorial run above uses the default NuRec-backed renderer. AlpaSim can also use
+[OmniDreams](https://github.com/nv-tlabs/omni-dreams) through
+[FlashDreams](https://github.com/NVIDIA/flashdreams) as a stateful video-model renderer behind the
+same `renderer` endpoint.
+
+| Renderer path | Main config entry point | Notes |
+|---------------|-------------------------|-------|
+| Default NuRec renderer | `deploy=local` | Best starting point for the basic tutorial and broad public scene coverage. |
+| Wizard-managed OmniDreams renderer | `deploy=managed_flashdreams` | Wizard starts a local FlashDreams renderer container. Requires a locally built FlashDreams image. |
+| External OmniDreams renderer | `deploy=external_video_model` | AlpaSim connects to an OmniDreams gRPC server running elsewhere. Useful when renderer GPUs live on another machine. |
+
+The active renderer is selected through the deploy config and materializes in
+`runtime.renderer.kind`; OmniDreams runs use `runtime.renderer.kind=video_model`. The driver remains
+a separate service, but the current public OmniDreams recipe is single-view, so use one of the
+known-compatible driver presets and timing presets documented in
+[VIDEO_MODEL.md](VIDEO_MODEL.md) instead of adding camera overrides by hand.
 
 # Level 2
 
@@ -340,14 +380,17 @@ the predictions of a policy, you can set
 
 ## Scenes
 
-The scene in AlpaSim is a NuRec reconstruction of a real-world driving log.
+Scenes in AlpaSim are USDZ artifacts built from real-world driving logs. The default NuRec renderer
+and the OmniDreams video-model renderer both use these artifacts; OmniDreams additionally conditions
+on ClipGT data packaged in the USDZ, including recorded first-frame JPEGs, camera calibration, and
+HD map data.
 
-Publicly available NuRec scenes are stored on
-[Hugging Face](https://huggingface.co/datasets/nvidia/PhysicalAI-Autonomous-Vehicles-NuRec/tree/main/sample_set/25.07_release)
+Publicly available scene artifacts are stored on
+[Hugging Face](https://huggingface.co/datasets/nvidia/PhysicalAI-Autonomous-Vehicles-NuRec/tree/26.01/sample_set/26.01_release)
 and, once downloaded, are placed under `data/nre-artifacts/all-usdzs`. The scenes are identified by
 their uuid, rather than their filenames, to prevent versioning issues. The list of currently
-available scenes exists in [scenes set](/data/scenes/sim_scenes.csv) and the set of available suites
-exists in [scene suites](/data/scenes/sim_suites.csv).
+available scenes exists in [scenes set](/data/scenes/sim_scenes.csv) and the set of available
+suites exists in [scene suites](/data/scenes/sim_suites.csv).
 
 #### Selecting Individual Scenes
 
@@ -370,13 +413,13 @@ instructions.
 #### Using Scene Suites
 
 Scene suites provide pre-validated collections of scenes for testing. To use the public sceneset
-with 910 validated scenes (:warning: this will download all the scenes):
+with 916 validated scenes (:warning: this will download all the scenes):
 
 ```bash
-uv run alpasim_wizard deploy=local topology=1gpu driver=vavam scenes.test_suite_id=public_2507 wizard.log_dir=$PWD/tutorial_suite
+uv run alpasim_wizard deploy=local topology=1gpu driver=vavam scenes.test_suite_id=public_2601 wizard.log_dir=$PWD/tutorial_suite
 ```
 
-This will run simulations across all 910 scenes in the `public_2507` suite from the 25.07 release dataset.
+This will run simulations across all 916 scenes in the `public_2601` suite from the 26.01 release dataset.
 
 ## Custom components
 
@@ -438,7 +481,7 @@ the context of a full simulation.
 1. (Terminal 1) `cd` to the generated directory (`tutorial_dbg`) and note the command/port of the
    component to be replaced in `docker-compose.yaml`. For the simulation case, we are looking for
    components in the `sim` profile, which includes `controller-0`, `driver-0`, `physics-0`,
-   `runtime-0`, and `sensorsim-0`. Here we will replace `controller-0`, which in this case has been
+   `runtime-0`, and `renderer-0`. Here we will replace `controller-0`, which in this case has been
    allocated port 6003.
 
 1. (Terminal 2) `cd` into the the controller src directory (`<repo_root>/src/controller/`) and
@@ -456,8 +499,14 @@ the context of a full simulation.
 1. (Terminal 1) Start the rest of the simulation with docker compose:
 
    ```bash
-   docker compose -f docker-compose.yaml --profile sim up runtime-0 driver-0 physics-0 sensorsim-0
+   docker compose -f docker-compose.yaml --profile sim up \
+     --exit-code-from runtime-0 \
+     runtime-0 driver-0 physics-0 renderer-0
    ```
+
+   `--exit-code-from runtime-0` is required for manual Docker Compose runs that include the
+   runtime. The runtime exits when the simulation is complete; the other services are long-running
+   servers. Without this flag, Docker Compose keeps waiting after `runtime-0` exits successfully.
 
 ### Using VSCode Debugger (Optional)
 
@@ -494,25 +543,36 @@ built-in debugger:
 
 If the `runtime` is the service being debugged, there are a few things that change. For one, it is
 expected that the other services are up and running before the `runtime` is brought up, so the
-ordering of steps will change. Additionally, one can speed up iteration by preventing the simulation
-from shutting down the docker containers after each simulation by setting
-`runtime.endpoints.do_shutdown=False` in the wizard command line.
+ordering of steps will change. In this manual workflow, the non-runtime services are started
+separately and remain running until you stop the Docker Compose process.
 
 1. (Terminal 1) Run the wizard to generate config files without running the simulation:
    ```bash
    uv run alpasim_wizard deploy=local topology=1gpu driver=vavam \
    wizard.log_dir=$PWD/tutorial_dbg_runtime \
    wizard.run_method=NONE  \
-   wizard.debug_flags.use_localhost=True \
-   runtime.endpoints.do_shutdown=False
+   wizard.debug_flags.use_localhost=True
    ```
 1. (Terminal 1) `cd` to the generated directory (`tutorial_dbg_runtime`) and start the non-runtime
    services:
-   `bash     docker compose -f docker-compose.yaml --profile sim up driver-0 controller-0 physics-0 sensorsim-0     `
+   ```bash
+   docker compose -f docker-compose.yaml --profile sim up \
+     driver-0 controller-0 physics-0 renderer-0
+   ```
 1. (Terminal 2) `cd` into the the runtime src directory (`<repo_root>/src/runtime/`) and prepare to
    start the runtime. The exact command paths will vary, but, to use the configuration generated
    from the earlier steps, an example command would be:
-   `bash     cd <repo_root>/src/runtime/     # Following command is based on the docker-compose.yaml generated by the wizard     uv run python -m alpasim_runtime.simulate \     --usdz-glob=../../data/nre-artifacts/all-usdzs/**/*.usdz \     --user-config=../../tutorial_dbg_runtime/generated-user-config-0.yaml \     --network-config=../../tutorial_dbg_runtime/generated-network-config.yaml \     --log-dir=../../tutorial_dbg_runtime \     --log-level=INFO     `
+   ```bash
+   cd <repo_root>/src/runtime/
+   # Following command is based on the docker-compose.yaml generated by the wizard
+   # Ensure the user config contains the data_source configuration
+   uv run python -m alpasim_runtime.simulate \
+     --user-config=../../tutorial_dbg_runtime/generated-user-config-0.yaml \
+     --network-config=../../tutorial_dbg_runtime/generated-network-config.yaml \
+     --log-dir=../../tutorial_dbg_runtime \
+     --eval-config=../../tutorial_dbg_runtime/eval-config.yaml \
+     --log-level=INFO
+   ```
 
 ### Using VSCode Debugger (Optional)
 
@@ -530,13 +590,16 @@ built-in debugger:
   "justMyCode": false,
   "cwd": "${workspaceFolder}/src/runtime",
   "args": [
-    "--usdz-glob=../../data/nre-artifacts/all-usdzs/**/*.usdz",
     "--user-config=../../tutorial_dbg_runtime/generated-user-config-0.yaml",
     "--network-config=../../tutorial_dbg_runtime/generated-network-config.yaml",
+    "--eval-config=../../tutorial_dbg_runtime/eval-config.yaml",
     "--log-dir=../../tutorial_dbg_runtime",
     "--log-level=INFO"
   ],
-  "console": "integratedTerminal"
+  "console": "integratedTerminal",
+  "env": {
+    "PYTHONPATH": "${workspaceFolder}/src/grpc:${workspaceFolder}/src/eval/src:${workspaceFolder}/src/utils:${workspaceFolder}/src/runtime:${env:PYTHONPATH}"
+  }
 }
 ```
 

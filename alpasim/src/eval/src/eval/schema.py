@@ -35,6 +35,11 @@ class MapElements(StrEnum):
     ROAD_EDGE = "road_edge"
     STOP_LINE = "stop_line"
     OTHER_LINE = "other_line"
+    CROSSWALK = "crosswalk"
+    ROAD_AREA = "road_area"
+    ROAD_ISLAND = "road_island"
+    PED_WALKWAY = "ped_walkway"
+    TRAFFIC_SIGN = "traffic_sign"
     # The ground truth trajectory as line on the road.
     GT_LINESTRING = "gt_linestring"
     # A "ghost" car driving the ground truth trajectory.
@@ -45,6 +50,10 @@ class MapElements(StrEnum):
     ROUTE = "route"
     # All other agents in the scene.
     AGENTS = "agents"
+    # Traffic model forecast trajectories for non-static agents.
+    TRAFFIC_PREDICTIONS = "traffic_predictions"
+    # Text labels for visible non-ego actor IDs.
+    AGENT_IDS = "agent_ids"
 
 
 class VideoLayout(StrEnum):
@@ -130,10 +139,18 @@ class ImageScorerConfig:
 
 
 @dataclass
+class OpenLoopCollisionScorerConfig:
+    # Horizon in seconds: how far into each planned trajectory to check for
+    # collisions against surrounding agents' recorded trajectories.
+    horizon_s: float = MISSING
+
+
+@dataclass
 class ScorersConfig:
     min_ade: MinADEScorerConfig = MISSING
     plan_deviation: PlanDeviationScorerConfig = MISSING
     image: ImageScorerConfig = MISSING
+    open_loop_collision: OpenLoopCollisionScorerConfig = MISSING
 
 
 @dataclass
@@ -158,12 +175,29 @@ class MetricAggregationModifiersConfig:
 
 
 @dataclass
+class SceneScoreConfig:
+    # Whether to compute scene scores in results-summary.json.
+    enabled: bool = True
+    # Progress at or above this value receives full progress score.
+    progress_saturation_threshold: float = 0.8
+    # Short ground-truth clips receive full progress score.
+    min_gt_distance_for_full_score_m: float = 5.0
+
+
+@dataclass
 class EvalConfig:
     # Whether evaluation is enabled. Set to false to skip eval during simulation.
     enabled: bool = True
+    # Whether to aggregate evaluation results when one or more rollouts failed.
+    allow_aggregation_with_failed_rollouts: bool = False
+    # Whether to parse DriveResponse.debug_info.unstructured_debug_info.
+    # This field is currently pickle-encoded by some internal drivers and should
+    # be disabled for untrusted driver images.
+    parse_unstructured_debug_info: bool = True
     # Configuration for scorers that have free parameters.
     scorers: ScorersConfig = MISSING
     aggregation_modifiers: MetricAggregationModifiersConfig = MISSING
+    scene_score: SceneScoreConfig = MISSING
     # Number of processes to use for parallel processing of ASL reading and
     # metric computation.
     num_processes: int = MISSING

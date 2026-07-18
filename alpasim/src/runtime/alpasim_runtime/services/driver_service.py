@@ -53,6 +53,7 @@ class DriveOutcome:
 
     trajectory: Trajectory
     reasoning_text: str | None
+    terminate_session: bool = False
 
 
 def _reasoning_text_from_response(response: DriveResponse) -> str | None:
@@ -240,14 +241,16 @@ class DriverService(ServiceBase[EgodriverServiceStub]):
 
     async def drive(
         self, time_now_us: int, time_query_us: int, renderer_data: bytes | None
-    ) -> Trajectory:
+    ) -> tuple[Trajectory, bool]:
         """Request a drive decision for the current session.
 
         Returns:
-            Trajectory containing the selected trajectory for the ego vehicle.
+            Tuple of (trajectory, terminate_session).  When terminate_session
+            is True the caller should terminate the rollout immediately
+            without completing the remainder of the step.
         """
         outcome = await self.drive_with_debug(time_now_us, time_query_us, renderer_data)
-        return outcome.trajectory
+        return outcome.trajectory, outcome.terminate_session
 
     async def drive_with_debug(
         self, time_now_us: int, time_query_us: int, renderer_data: bytes | None
@@ -310,4 +313,5 @@ class DriverService(ServiceBase[EgodriverServiceStub]):
         return DriveOutcome(
             trajectory=trajectory_from_grpc(response.trajectory),
             reasoning_text=_reasoning_text_from_response(response),
+            terminate_session=response.terminate_session,
         )

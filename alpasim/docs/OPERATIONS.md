@@ -10,6 +10,12 @@ The number of service replicas and their GPU assignments are configured in deplo
 located in `src/wizard/configs/deploy/`:
 
 - **Local workstation**: `local.yaml`
+- **Wizard-managed OmniDreams renderer**: `managed_flashdreams.yaml`
+- **External OmniDreams renderer**: `external_video_model.yaml`
+
+The default renderer path is NuRec-backed. OmniDreams runs use FlashDreams behind the same
+`renderer` endpoint; see [VIDEO_MODEL.md](VIDEO_MODEL.md) for the renderer-specific chunking,
+camera, and deployment constraints.
 
 #### Understanding the Configuration
 
@@ -17,7 +23,7 @@ Each service has two key parameters:
 
 ```yaml
 services:
-  sensorsim:
+  renderer:
     replicas_per_container: 4 # Number of service replicas per container
     gpus: [0, 1, 2, 3] # GPUs to create containers on
 ```
@@ -45,22 +51,22 @@ Total capacity = nr_gpus * replicas_per_container * n_concurrent_rollouts
 where **`n_concurrent_rollouts`** is the number of rollouts (simulation episodes) each service
 replica can process simultaneously. This controls how many scenes can be simulated in parallel.
 
-For sensorsim/NRE, this changed in recent NRE releases: each container may run a single NRE
-process with internal worker concurrency via `--max-workers`, instead of multiple replicas per
-container. In that case, think of effective per-container capacity as:
+For NRE-backed renderer deployments, this changed in recent NRE releases: each container may run a
+single NRE process with internal worker concurrency via `--max-workers`, instead of multiple
+replicas per container. In that case, think of effective per-container capacity as:
 
 ```
-effective sensorsim capacity = nr_gpus * max_workers * n_concurrent_rollouts
+effective renderer capacity = nr_gpus * max_workers * n_concurrent_rollouts
 ```
 
-If `replicas_per_container=1` and NRE runs with `--max-workers=4`, one sensorsim container can
+If `replicas_per_container=1` and NRE runs with `--max-workers=4`, one renderer container can
 still serve four render workers internally.
 
 All services should have similar total capacity to avoid bottlenecks. Example:
 
 ```yaml
 services:
-  sensorsim:
+  renderer:
     replicas_per_container: 1
     gpus: [0, 1]
 
@@ -74,7 +80,7 @@ services:
 
 runtime:
   endpoints:
-    sensorsim:
+    renderer:
       n_concurrent_rollouts: 4 # with --max-workers=4: 2 GPUs * 4 workers * 4 concurrent = 32
 
     driver:
@@ -84,13 +90,18 @@ runtime:
       n_concurrent_rollouts: 2 # 1 CPU * 16 replicas * 2 concurrent = 32
 ```
 
-For sensorsim specifically, tune these together:
+For NRE-backed renderer deployments, tune these together:
 
-- `services.sensorsim.replicas_per_container`
+- `services.renderer.replicas_per_container`
 - the NRE container's internal `--max-workers`
-- `runtime.endpoints.sensorsim.n_concurrent_rollouts`
+- `runtime.endpoints.renderer.n_concurrent_rollouts`
 
 Recent OSS deploy configs prefer `replicas_per_container: 1` plus higher `--max-workers`.
+
+For OmniDreams/FlashDreams deployments, start with
+`runtime.endpoints.renderer.n_concurrent_rollouts=1` and the `+chunking=8frame` preset from
+[VIDEO_MODEL.md](VIDEO_MODEL.md). Scale only after the
+renderer server, driver cadence, and GPU memory headroom are known to be stable.
 
 ### How do I change the model?
 
@@ -139,7 +150,7 @@ The simulator has multiple synchronized "clocks":
 1. **Camera frames** (`frame_interval_us`) - How often cameras capture images
 1. **Pose reporting** (`pose_reporting_interval_us`) - How often intermediate poses are reported
    between control steps (0 = at `control_timestep_us` rate, the default)
-1. **Simulation start** (`time_start_offset_us`) - Initial offset to avoid artifacts
+1. **Simulation start** - The recorded egomotion start timestamp by default
 
 For correct operation, these must be mathematically aligned.
 
@@ -157,12 +168,6 @@ To change to 5Hz inference (200ms between decisions):
 
 1. **Pose reporting** (`pose_reporting_interval_us`): defaults to 0, which falls back to
    `control_timestep_us`. No explicit setting needed unless you want intermediate pose reports.
-
-1. **Set time offset** (must be a multiple of `control_timestep_us`):
-
-   ```bash
-   runtime.simulation_config.time_start_offset_us=600000  # 3 * 200ms
-   ```
 
 1. **Match camera frame rate** (VaVam default has 1 camera):
 
@@ -182,7 +187,6 @@ To change to 5Hz inference (200ms between decisions):
 uv run alpasim_wizard deploy=local topology=1gpu driver=vavam \
     wizard.log_dir=runs/{DATETIME} \
     runtime.simulation_config.control_timestep_us=200000 \
-    runtime.simulation_config.time_start_offset_us=600000 \
     runtime.simulation_config.cameras.0.frame_interval_us=200000
 ```
 
@@ -197,7 +201,6 @@ To use 30Hz cameras (33.3ms) but 10Hz inference (100ms):
 1. **Inference runs at 10Hz**: `control_timestep_us=100002` (must be 3 × 33334)
 1. **Subsample frames**: `driver.inference.Cframes_subsample=3` (use every 3rd frame)
 1. **Pose reporting**: `pose_reporting_interval_us` defaults to 0 (falls back to `control_timestep_us`)
-1. **Time offset aligns**: `time_start_offset_us=300006` (3 × 100002)
 
 **Full command** (based on `exp/sim/20s_at_30Hz.yaml`):
 
@@ -205,7 +208,6 @@ To use 30Hz cameras (33.3ms) but 10Hz inference (100ms):
 uv run alpasim_wizard deploy=local topology=1gpu driver=vavam \
     wizard.log_dir=runs/{DATETIME} \
     runtime.simulation_config.control_timestep_us=100002 \
-    runtime.simulation_config.time_start_offset_us=300006 \
     runtime.simulation_config.cameras.0.frame_interval_us=33334 \
     ++driver.inference.Cframes_subsample=3
 ```
@@ -242,17 +244,18 @@ runtime.simulation_config.assert_zero_decision_delay=true
 
 Based on actual config files in `src/wizard/configs/`:
 
-| Frequency | `control_timestep_us` | `time_start_offset_us`      | Notes               |
-| --------- | --------------------- | --------------------------- | ------------------- |
-| 2Hz       | 500000 (500ms)        | 500000 (1×) or 1500000 (3×) | VaVam default       |
-| 5Hz       | 200000 (200ms)        | 600000 (3×)                 | Example config      |
-| 10Hz      | 100000 (100ms)        | 300000 (3×)                 | Base config default |
-| 30Hz      | 33334 (33.3ms)        | 100002 (3×)                 | High frequency      |
+| Frequency | `control_timestep_us` | Notes               |
+| --------- | --------------------- | ------------------- |
+| 2Hz       | 500000 (500ms)        | VaVam default       |
+| 5Hz       | 200000 (200ms)        | Example config      |
+| 10Hz      | 100000 (100ms)        | Base config default |
+| 30Hz      | 33334 (33.3ms)        | High frequency      |
 
 `pose_reporting_interval_us` defaults to 0 for all frequencies (falls back to `control_timestep_us`).
 
-**Pattern**: Most configs use `time_start_offset_us = 3 × control_timestep_us` to avoid artifacts at
-scene start.
+Simulation starts from the first USDZ timestamp with valid recorded camera and
+non-ego actor data. The first policy step is aligned to the first completed
+camera frames.
 
 **See also**:
 
@@ -273,9 +276,10 @@ After a run completes, results are in `wizard.log_dir` (e.g., `runs/{RUN_DIR}/`)
   - `metrics_results.png` - Visual summary of driving quality metrics
   - `metrics_unprocessed.parquet` - Combined metrics from all rollouts
   - `videos/` - Organized by violation types
-- **`metrics/`** - Performance profiling data:
-  - `metrics.prom` - Prometheus metrics from simulation
-  - `metrics_plot.png` - Performance visualization (CPU/GPU/RPC metrics)
+- **`prometheus/`** - Performance profiling data:
+  - `data/` - local Prometheus TSDB for the run
+  - `targets/alpasim.json` - generated Prometheus file-SD targets
+- **`metrics_plot.png`** - Performance visualization (CPU/GPU/RPC metrics)
 - **`txt-logs/`** - Service logs for debugging
 - **`wizard-config.yaml`** - Resolved configuration used for this run
 
@@ -331,7 +335,7 @@ problematic scenarios.
 After each simulation run, Alpasim automatically generates a comprehensive performance
 visualization:
 
-**Location**: `runs/{RUN_DIR}/metrics/metrics_plot.png`
+**Location**: `runs/{RUN_DIR}/metrics_plot.png`
 
 This 3×3 grid plot includes:
 
@@ -346,7 +350,7 @@ This 3×3 grid plot includes:
 
 - Rollout Duration histogram - Total time per rollout
 - Step Duration histogram - Time per simulation step
-- Service Configuration table - Shows replica counts and capacity
+- Run summary - Shows runtime idle fraction and seconds per rollout
 
 **Row 3: Resource Utilization**
 
@@ -377,6 +381,60 @@ This 3×3 grid plot includes:
 - **Wide rollout time variance** → Investigate outliers in logs
 
 ## Simulation Configuration
+
+### How do I start the runtime as a server?
+
+Use `wizard.run_mode=SERVER` to start the normal backing services and keep the
+runtime alive as a gRPC daemon:
+
+```bash
+uv run alpasim_wizard deploy=local topology=1gpu driver=vavam \
+    wizard.run_mode=SERVER \
+    wizard.log_dir=runs/{DATETIME}
+```
+
+The wizard writes the resolved client endpoint to
+`generated-runtime-server.yaml` in the run directory:
+
+```yaml
+host: localhost
+port: 6005
+```
+
+This file is generated before Docker Compose has necessarily finished starting
+the runtime daemon. Clients should treat `host` and `port` as discovery metadata
+and poll until the runtime gRPC port accepts connections.
+
+After the port accepts connections, clients can call
+`RuntimeService.get_runtime_info()` to discover the server's maximum supported
+concurrent rollouts, available scenes and lightweight scene metadata, service
+capacity by backing service, and service versions before submitting
+`RuntimeService.simulate()` requests.
+
+By default, the runtime server port is allocated from `wizard.baseport` after
+the backing service ports. Pin it with `wizard.runtime_server_port=<port>` when
+client scripts or firewall rules need a stable port.
+
+Static external drivers use `driver_source=external_static` with
+`wizard.external_services.driver`; `driver=manual` provides a default
+`localhost:6789` address for the manual-driver workflow. Server clients can
+also use `driver_source=external_dynamic` and provide drivers per request with
+`SimulationRequest.available_drivers` and `n_concurrent_per_driver`; those
+request addresses override the configured driver pool for that RPC only.
+
+To stop the server, call `RuntimeService.shut_down()`. In managed deployments,
+Docker Compose or Slurm tears down backing services after the runtime exits.
+
+When running a generated `docker-compose.yaml` manually for one-shot simulations,
+start Compose with `--exit-code-from runtime-0`, for example:
+
+```bash
+docker compose -f docker-compose.yaml up --exit-code-from runtime-0
+```
+
+The runtime container exits when the simulation is complete, while the backing
+services are long-running servers. Without `--exit-code-from runtime-0`, Docker
+Compose can continue waiting after `runtime-0` exits successfully.
 
 ### How do I enable/disable specific services?
 

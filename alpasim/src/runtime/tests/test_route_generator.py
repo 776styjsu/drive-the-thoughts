@@ -2,9 +2,11 @@
 # Copyright (c) 2025-2026 NVIDIA Corporation
 
 import math
+from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
+from alpasim_runtime.config import RouteGeneratorType
 from alpasim_runtime.route_generator import (
     RouteGenerator,
     RouteGeneratorMap,
@@ -40,6 +42,21 @@ def test_route_generator_invalid_waypoints():
         RouteGeneratorRecorded(np.zeros((1, 3)))
 
 
+def test_route_generator_none_skips_waypoint_validation():
+    route_generator = RouteGenerator.create(
+        np.zeros((1, 3)),
+        vector_map=MagicMock(),
+        route_generator_type=RouteGeneratorType.NONE,
+    )
+
+    assert route_generator is None
+
+
+def test_route_generator_invalid_route_start_offset(rig_waypoints_in_local):
+    with pytest.raises(ValueError, match="route_start_offset_m"):
+        RouteGeneratorRecorded(rig_waypoints_in_local, route_start_offset_m=-1.0)
+
+
 def test_route_generator_nominal_from_origin(rig_waypoints_in_local):
     route_generator = RouteGeneratorRecorded(rig_waypoints_in_local)
 
@@ -66,6 +83,39 @@ def test_route_generator_nominal_from_origin(rig_waypoints_in_local):
     )
     assert waypoints_rig[-1] == pytest.approx(
         [COS_THETA * EXPECTED_DISTANCE, SIN_THETA * EXPECTED_DISTANCE, 0.0]
+    )
+
+
+def test_route_generator_start_offset(rig_waypoints_in_local):
+    route_generator = RouteGeneratorRecorded(
+        rig_waypoints_in_local,
+        route_start_offset_m=40.0,
+    )
+
+    pose_local_to_rig = _make_pose(np.array([0.0, 0.0, 0.0]))
+    route_rig = route_generator.generate_route(0, pose_local_to_rig)
+    waypoints_rig = route_rig.waypoints
+
+    first_kept_distance = RouteGenerator.DISTANCE_BETWEEN_WAYPOINTS * 10
+    assert len(route_rig) == 10
+    assert waypoints_rig[0] == pytest.approx(
+        [first_kept_distance * COS_THETA, first_kept_distance * SIN_THETA, 0.0]
+    )
+    assert waypoints_rig[-1] == pytest.approx([80.0 * COS_THETA, 80.0 * SIN_THETA, 0.0])
+    assert np.linalg.norm(waypoints_rig[1] - waypoints_rig[0]) == pytest.approx(
+        RouteGenerator.DISTANCE_BETWEEN_WAYPOINTS,
+        abs=1.0e-5,
+    )
+
+    pose_local_to_rig = _make_pose(np.array([10.5 * COS_THETA, 10.5 * SIN_THETA, 0.0]))
+    route_rig = route_generator.generate_route(0, pose_local_to_rig)
+    assert route_rig.waypoints[0] == pytest.approx(
+        [first_kept_distance * COS_THETA, first_kept_distance * SIN_THETA, 0.0],
+        abs=1.0e-4,
+    )
+    assert route_rig.waypoints[-1] == pytest.approx(
+        [80.0 * COS_THETA, 80.0 * SIN_THETA, 0.0],
+        abs=1.0e-4,
     )
 
 

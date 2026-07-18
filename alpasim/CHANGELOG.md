@@ -2,6 +2,207 @@
 This document lists major updates which change UX and require adaptation.
 It should be sorted by date (more recent on top) and link to MRs which introduce the changes.
 
+## July 2026 public sync updates (12.07.26)
+
+This sync expands the public scene catalog, improves rollout reliability and
+scheduling, and adds new telemetry, evaluation, and Slurm controls.
+
+### Scene catalogs and artifact loading
+
+The public 26.04 catalog is available as the `public_2604` suite, containing
+1,606 scenes after removing known-invalid artifacts. Scene-suite CSV rows now
+pin an exact artifact with `test_suite_id`, `scene_id`, and `uuid`; suite lookup
+no longer selects the newest artifact sharing a scene ID.
+
+Artifacts whose parquet vector map is stored under `fastmap/` are now
+supported. AlpaSim loads it after the preferred `map_data/` and `clipgt/`
+sources, aligns its height to the reconstruction ground mesh, and retains XODR
+as the final fallback.
+
+**Migration**: Add a matching `uuid` column to custom suite CSVs. Every
+`(scene_id, uuid)` pair must exist in the corresponding scene catalog.
+
+### Runtime reliability and scheduling
+
+Failed rollouts are retried up to `runtime.max_rollout_retries` times, with a
+default of two retries. Renderer startup now waits for channel readiness and
+retries known transient NRE initialization failures. Invalid vector maps return
+the structured `ROLLOUT_ERROR_CODE_INVALID_SCENE_MAP` error code.
+
+Scene-affine renderer dispatch now spreads non-affine work across the
+least-loaded renderers and bounds scene replication. New controls include
+`max_renderers_per_scene`, `max_scenes_per_renderer`, and cache refresh timing.
+
+**Migration**: Replace a boolean override such as
+`runtime.scene_affine_dispatch=true` with
+`runtime.scene_affine_dispatch.enabled=true`. Public NRE releases without the
+loaded-scene introspection RPC should leave this disabled.
+
+### Traffic simulation and evaluation
+
+Traffic simulation is explicitly disabled by default through
+`trafficsim=disabled`; select `trafficsim=catk` to enable CATK. CATK now batches
+requests, limits per-request CPU threading, and derives worker counts from the
+selected topology.
+
+Evaluation adds the `open_loop_collision` metric, which checks planned ego
+trajectories against recorded actors over a configurable horizon. Force-GT
+warmup exclusion is now anchored to the actual renderer handover, preventing
+warmup frames from leaking into aggregated metrics. Route generation can be
+disabled with `runtime.simulation_config.route_generator_type=NONE`.
+
+The public Alpamayo 1 driver can derive deterministic per-inference seeds from
+the session seed with `driver.model.force_determinism=true`. The low-speed MPC
+linearization also corrects two erroneous derivative terms.
+
+**Migration**: Custom CATK configs should use
+`catk.loader.prediction_steps` instead of `minimum_future_steps`.
+
+### Telemetry and Slurm execution
+
+Per-process Prometheus exporters can now be scraped by an external Prometheus
+without starting the wizard-managed sidecar. Set
+`wizard.prometheus.start_prometheus=false`; discovery publication and exporter
+lifecycle remain active. Slurm telemetry adds GPU ownership metrics for joining
+AlpaSim processes with DCGM data, and the Grafana dashboard includes the new
+scheduler, GPU, process, and throughput panels.
+
+Slurm deployments can opt into CUDA MPS with `wizard.enable_mps=true` to allow
+co-located GPU services to execute kernels concurrently. This option fails fast
+for non-Slurm run methods. Slurm submission also supports automatic resubmission
+of timed-out jobs.
+
+## Runtime telemetry with Prometheus and Grafana (30.06.26)
+AlpaSim runs now start Prometheus telemetry by default. The wizard allocates
+metrics ports, starts Prometheus support services, writes scrape configuration,
+and preserves the Prometheus TSDB under the run directory. Runs still generate
+`metrics_plot.png`.
+
+Grafana dashboard resources and a helper script are available for inspecting
+local or shared Prometheus file-SD targets:
+
+```bash
+src/tools/scripts/start-prometheus-grafana.sh <file-sd-dir>
+```
+
+Eval aggregation no longer reads Prometheus runtime metric summaries or adds
+runtime performance fields to driving metric outputs. Runs no longer generate
+`prometheus/runtime_metrics_summary.json`; query Prometheus or use Grafana for
+runtime performance analysis.
+
+## SMART/CATK trafficsim integration (29.06.26)
+Added an integrated CATK-backed traffic simulation service. Use
+`trafficsim=catk` to run the SMART/CATK traffic predictor from the AlpaSim base
+image with model weights stored under `data/trafficsim-models`.
+
+## Upgrade OSS renderer to NRE-GA 26.04 (11.06.26)
+Bumped the `base_config.yaml` renderer image to `nvcr.io/nvidia/nre/nre-ga:26.04` and repointed `defines.renderer_entrypoint` to the `/app/run` symlink (the old path was renamed in 26.04).
+
+## Eval Modifications (05.06.26)
+Eval aggregation now writes `results-summary.json` with per-rollout pass/fail status,
+scene scores, failed rollout rows, and driver `drive` RPC latency from telemetry.
+Ground-truth scoring adds `progress_rel_to_total` and `gt_dist_traveled_m`; tune or
+disable scoring with `eval.scene_score`, and set `eval.allow_aggregation_with_failed_rollouts=true`
+to aggregate successful rollouts while preserving failed rollout records.
+
+
+## May/June 2026 public sync updates (02.06.26)
+
+This sync focuses on renderer unification, video-model support, scene catalog
+updates, and runtime robustness improvements.
+
+### Renderer and video-model workflow
+
+Wizard-managed renderer services now use the `renderer` service key for both
+the default NRE-backed renderer and video-model renderers. The runtime selects
+the active renderer with `runtime.renderer.kind`, and generated configs now use
+`runtime.endpoints.renderer` / `network.renderer` instead of `sensorsim`.
+
+Video-model renderer support is now built into the main runtime and wizard
+configuration. New public configs include `deploy=external_video_model`,
+`deploy=managed_flashdreams`, `+chunking=<8frame|12frame|16frame>`, and
+`docs/VIDEO_MODEL.md`. Docker Compose deployments now stop backing services when
+`runtime-0` exits.
+
+**Migration**: Replace `services.sensorsim` and
+`wizard.run_sim_services=["sensorsim", ...]` with `services.renderer` and
+`wizard.run_sim_services=["renderer", ...]`. Replace
+`physics/implemented_in_sensorsim.yaml` with
+`physics/implemented_in_renderer.yaml`. Replace custom
+`runtime.endpoints.sensorsim` / `network.sensorsim` entries with `renderer`.
+For one-shot Compose runs, use `docker compose up --exit-code-from runtime-0`.
+
+### Scene catalog and scene loading
+
+The default public Hugging Face scene catalog now uses the 26.01 release and the
+`public_2601` suite. The previous 25.05 catalog remains available through
+`sim_scenes_2505.csv` / `sim_suites_2505.csv`.
+
+Runtime scene discovery now uses `scene_provider` configuration instead of
+passing artifact globs through the runtime CLI.
+
+**Migration**: Existing 25.05 cached artifacts are not reused by the new default.
+Pin `scenes.scenes_csv` / `scenes.suites_csv` to the legacy CSVs if you need the
+old suite. For direct `python -m alpasim_runtime.simulate` usage, remove
+`--usdz-glob` and configure `scene_provider.kind` plus
+`scene_provider.usdz.data_dir`.
+
+### Runtime, daemon, and evaluation robustness
+
+The runtime daemon now exposes `RuntimeService.get_runtime_info` for client-side
+capacity and scene discovery. Startup logs now report connection progress while
+waiting for services.
+
+Closed-loop and RL workflows also gained `DriveResponse.terminate_session`,
+single-rollout `RolloutSpec.session_uuid`, explicit driver precondition errors,
+spawned evaluation workers, empty driver-response handling, and continuous
+min-distance eval scorers.
+
+**Migration**: Existing clients remain compatible. Daemon clients can call
+`get_runtime_info`, set `RolloutSpec.session_uuid` for precise single-rollout
+abort handling, or set `DriveResponse.terminate_session=true` for early episode
+termination. Eval configs can opt into `min_distance_to_obstacle_m` and
+`min_distance_to_lane_boundary_m`.
+
+### Simulation timing and logging
+
+Rollout timing now starts from the first GT camera frame timestamp. Force-GT
+startup blends recorded GT trajectories into physics-derived trajectories, and
+`runtime.simulation_config.skip_driver_during_force_gt` can skip expensive driver
+policy queries during force-GT warmup.
+
+`alpasim_utils.asl_to_frames` now exports video-model RGB / HD-map streams and
+names output frames by end-of-frame timestamp. `alpasim_utils.print_asl` redacts
+large video-model image payloads.
+
+**Migration**: Remove custom `time_start_offset_us` and camera
+`first_frame_offset_us` settings. Update downstream scripts that parse frame
+filenames to expect end-of-frame timestamps.
+
+### Developer workflow
+
+The `src/grpc` package now builds generated protobuf artifacts during package
+builds, so downstream Git installs no longer need a manual `compile-protos`
+step. `trajdata-alpasim` is pinned to a specific Git commit for consistent
+workspace resolution.
+
+**Migration**: Local proto development can still use `uv run compile-protos`.
+Re-run dependency sync after pulling this change.
+
+## Wizard runtime server mode and run mode rename (28.04.26)
+Wizard run modes now distinguish one-shot runtime execution from long-running runtime daemon deployment. `wizard.run_mode=BATCH` has been renamed to `wizard.run_mode=ONESHOT`, and `wizard.run_mode=SERVER` starts the runtime as a gRPC server for request-scoped simulations.
+
+**Migration**: If you explicitly set `wizard.run_mode=BATCH`, replace it with `wizard.run_mode=ONESHOT`. The default behavior remains unchanged for standard one-shot execution workflows.
+
+### External driver configuration changes
+
+External driver ownership is now expressed through `driver_source` config groups rather than deployment targets:
+* Default managed driver behavior remains unchanged.
+* `driver_source=external_static` uses configured external driver addresses, replacing the removed `deploy=local_external_driver` deployment target.
+* `driver_source=external_dynamic` supports per-request drivers via `SimulationRequest.available_drivers`.
+
+**Migration**: Replace `deploy=local_external_driver` with `deploy=local driver_source=external_static driver=manual`.
+
 ## Move evaluation to a separate thread (03.04.26)
 Runtime evaluation now runs in its own thread instead of inline in the simulation loop. This decouples eval latency from the simulation step, improving throughput when evaluation is expensive.
 

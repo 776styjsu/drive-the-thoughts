@@ -2,17 +2,18 @@
 # 8-GPU topology: 64 concurrent rollouts. For high-throughput SLURM runs with OSS driver.
 
 defines:
-  nre_cache_size: 17  # sensorsim.n_concurrent_rollouts + 1
+  nre_cache_size: 17  # renderer.n_concurrent_rollouts + 1
   physics_cache_size: 6
+
+trafficsim:
+  server:
+    max_workers: 16
 
 eval:
   num_processes: 32
 
 services:
-  sensorsim:
-    environments:
-      - OMP_NUM_THREADS=1
-      - PYTORCH_CUDA_ALLOC_CONF=garbage_collection_threshold:0.7
+  renderer:
     replicas_per_container: 1
     gpus: [0, 1, 2, 3]
 
@@ -29,18 +30,21 @@ services:
     gpus: null
 
   trafficsim:
+    # CATK loads a complete model per replica. Keep one model per GPU; four
+    # replicas per GPU exhaust node memory before the runtime can start.
     replicas_per_container: 1
-    gpus: [0, 1]
+    gpus: [0, 1, 2, 3]
 
 runtime:
   nr_workers: 8
   endpoints:
     # Total capacity per service = nr_gpus x replicas_per_container x n_concurrent_rollouts
-    # SENS: 4 x 1  x 16 = 64
+    # REND: 4 x 1  x 16 = 64
     # DRIV: 4 x 8  x 2  = 64
     # PHYS: 4 x 4  x 4  = 64
     # CONT: 1 (CPU) x 16 x 4 = 64
-    sensorsim:
+    # TRAF: 4 x 1  x 16 = 64
+    renderer:
       n_concurrent_rollouts: 16
     driver:
       n_concurrent_rollouts: 2
@@ -50,6 +54,5 @@ runtime:
       skip: false
     controller:
       n_concurrent_rollouts: 4
-      skip: false
     trafficsim:
-      skip: true
+      n_concurrent_rollouts: 16

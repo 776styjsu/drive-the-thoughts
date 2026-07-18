@@ -4,16 +4,21 @@
 from __future__ import annotations
 
 import logging
+import os
 from collections import defaultdict
+from collections.abc import Callable
 from uuid import uuid4
 
 from alpasim_grpc.v0 import logging_pb2, runtime_pb2
 from alpasim_runtime.address_pool import AddressPool
 from alpasim_runtime.daemon.scheduler import DaemonScheduler, DaemonUnavailableError
+from alpasim_runtime.errors import UnknownSceneError
 from alpasim_runtime.runtime_context import (
+    RuntimeContext,
     build_runtime_context,
     compute_num_consumers_per_worker,
 )
+from alpasim_runtime.scene_loader import SceneLoader
 from alpasim_runtime.worker.ipc import JobResult, PendingRolloutJob
 from alpasim_runtime.worker.runtime import WorkerRuntime, start_worker_runtime
 
@@ -82,6 +87,7 @@ def build_simulation_return(
                     success=result.success,
                     rollout_uuid=result.rollout_uuid or "",
                     error=result.error or "",
+                    error_code=result.error_code,
                     timestep_metrics=_build_timestep_metrics(result),
                     aggregated_metrics=_build_aggregated_metrics(result),
                 )
@@ -93,7 +99,55 @@ def build_simulation_return(
         physics_version=version_ids.physics_version,
         driver_version=version_ids.egodriver_version,
         traffic_version=version_ids.traffic_version,
+        video_model_version=version_ids.video_model_version,
         rollout_returns=rollout_returns,
+    )
+
+
+def _build_scene_metadata_info(metadata) -> runtime_pb2.SceneMetadata:
+    return runtime_pb2.SceneMetadata(
+        version_string=metadata.version_string,
+        training_date=metadata.training_date,
+        dataset_hash=metadata.dataset_hash,
+        uuid=metadata.uuid,
+        camera_ids=metadata.sensors.camera_ids,
+        lidar_ids=metadata.sensors.lidar_ids,
+        start_time_us=int(metadata.time_range.start),
+        end_time_us=int(metadata.time_range.end),
+    )
+
+
+def build_runtime_info(
+    runtime_context: RuntimeContext,
+    version_ids: logging_pb2.RolloutMetadata.VersionIds,
+) -> runtime_pb2.RuntimeInfo:
+    """Build a RuntimeInfo proto from the daemon startup context."""
+    return runtime_pb2.RuntimeInfo(
+        max_supported_concurrent_rollouts=runtime_context.max_in_flight,
+        nr_workers=runtime_context.config.user.nr_workers,
+        renderer_type=runtime_context.config.user.renderer.kind.value,
+        scenes=[
+            runtime_pb2.SceneInfo(
+                scene_id=scene.scene_id,
+                provider_kind=scene.provider_kind,
+                metadata=_build_scene_metadata_info(scene.metadata),
+            )
+            for scene in runtime_context.scene_loader.scene_infos
+        ],
+        service_capacities=[
+            runtime_pb2.ServiceCapacity(
+                service_name=service_name,
+                total_capacity=pool.total_capacity or 0,
+                skipped=pool.skip,
+            )
+            for service_name, pool in sorted(runtime_context.pools.items())
+        ],
+        runtime_version=version_ids.runtime_version,
+        nre_version=version_ids.sensorsim_version,
+        physics_version=version_ids.physics_version,
+        driver_version=version_ids.egodriver_version,
+        traffic_version=version_ids.traffic_version,
+        video_model_version=version_ids.video_model_version,
     )
 
 
@@ -103,30 +157,27 @@ class InvalidRequestError(ValueError):
     pass
 
 
-class UnknownSceneError(InvalidRequestError):
-    """Raised when a simulation request references a scene_id with no known artifact."""
-
-    def __init__(self, scene_id: str):
-        super().__init__(f"No artifact found for scene_id: {scene_id}")
-        self.scene_id = scene_id
-
-
 def build_pending_jobs_from_request(
     request: runtime_pb2.SimulationRequest,
-    scene_id_to_artifact_path: dict[str, str],
+    request_id: str,
+    has_scene: Callable[[str], bool],
 ) -> list[PendingRolloutJob]:
     """Expand a SimulationRequest into individual PendingRolloutJob entries.
 
     Each RolloutSpec is expanded by its ``nr_rollouts`` count.  Specs with
     ``nr_rollouts=0`` are silently dropped with a warning.
 
+    Args:
+        request: The simulation request to expand.
+        request_id: Identifier stamped onto every job for result routing.
+        has_scene: Callable that returns True for known scene_ids.
+
     Raises:
-        UnknownSceneError: If a spec references a scene_id not present in
-            *scene_id_to_artifact_path*.
+        UnknownSceneError: If a spec references an unknown scene_id.
     """
     jobs: list[PendingRolloutJob] = []
     for spec_index, spec in enumerate(request.rollout_specs):
-        if spec.scenario_id not in scene_id_to_artifact_path:
+        if not has_scene(spec.scenario_id):
             raise UnknownSceneError(spec.scenario_id)
 
         if spec.nr_rollouts == 0:
@@ -136,13 +187,22 @@ def build_pending_jobs_from_request(
             )
             continue
 
-        for _ in range(spec.nr_rollouts):
+        session_uuids = list(spec.session_uuids)
+        if session_uuids and len(session_uuids) != spec.nr_rollouts:
+            raise ValueError(
+                f"RolloutSpec scenario_id={spec.scenario_id!r}: "
+                f"len(session_uuids)={len(session_uuids)} != "
+                f"nr_rollouts={spec.nr_rollouts}"
+            )
+
+        for rollout_idx in range(spec.nr_rollouts):
             jobs.append(
                 PendingRolloutJob(
+                    request_id=request_id,
                     job_id=uuid4().hex,
                     scene_id=spec.scenario_id,
                     rollout_spec_index=spec_index,
-                    artifact_path=scene_id_to_artifact_path[spec.scenario_id],
+                    session_uuid=session_uuids[rollout_idx] if session_uuids else "",
                 )
             )
     return jobs
@@ -166,19 +226,18 @@ class DaemonEngine:
         user_config: str,
         network_config: str,
         eval_config: str,
-        usdz_glob: str,
         log_dir: str,
         validate_config_scenes: bool = True,
     ) -> None:
         self._user_config_path = user_config
         self._network_config_path = network_config
         self._eval_config_path = eval_config
-        self._usdz_glob = usdz_glob
         self._log_dir = log_dir
         self._validate_config_scenes = validate_config_scenes
 
         self._version_ids: logging_pb2.RolloutMetadata.VersionIds | None = None
-        self._scene_id_to_artifact_path: dict[str, str] = {}
+        self._runtime_context: RuntimeContext | None = None
+        self._scene_loader: SceneLoader | None = None
         self._scheduler: DaemonScheduler | None = None
         self._worker_runtime: WorkerRuntime | None = None
         self._started = False
@@ -189,13 +248,19 @@ class DaemonEngine:
             raise RuntimeError("daemon is not started")
         return self._version_ids
 
+    def _has_scene(self, scene_id: str) -> bool:
+        """Return whether the runtime knows about the given scene_id."""
+        if self._scene_loader is None:
+            raise RuntimeError("SceneLoader not initialized")
+        return self._scene_loader.has_scene(scene_id)
+
     async def startup(self) -> None:
         """Initialize the runtime context, start workers, and begin scheduling.
 
         Builds the RuntimeContext (parses configs, probes service versions,
-        validates scenarios, discovers scene artifacts), then creates the
-        worker runtime and daemon scheduler.  Idempotent: subsequent calls
-        after the first are no-ops.
+        validates scenarios, and creates the scene loader), then creates the
+        worker runtime and daemon scheduler. Idempotent: subsequent calls after
+        the first are no-ops.
         """
         if self._started:
             return
@@ -204,34 +269,64 @@ class DaemonEngine:
             user_config_path=self._user_config_path,
             network_config_path=self._network_config_path,
             eval_config_path=self._eval_config_path,
-            usdz_glob=self._usdz_glob,
             validate_config_scenes=self._validate_config_scenes,
         )
+
+        self._scene_loader = runtime_context.scene_loader
 
         num_consumers_per_worker = compute_num_consumers_per_worker(
             max_in_flight=runtime_context.max_in_flight,
             nr_workers=runtime_context.config.user.nr_workers,
         )
 
-        worker_runtime = start_worker_runtime(
-            config=runtime_context.config,
-            user_config_path=self._user_config_path,
-            num_consumers=num_consumers_per_worker,
-            log_dir=self._log_dir,
-            eval_config=runtime_context.eval_config,
-            version_ids=runtime_context.version_ids,
-        )
+        worker_runtime: WorkerRuntime | None = None
+        try:
+            worker_runtime = start_worker_runtime(
+                config=runtime_context.config,
+                user_config_path=self._user_config_path,
+                num_consumers=num_consumers_per_worker,
+                log_dir=self._log_dir,
+                eval_config=runtime_context.eval_config,
+                version_ids=runtime_context.version_ids,
+            )
 
-        scheduler = DaemonScheduler(
-            pools=runtime_context.pools,
-            runtime=worker_runtime,
-        )
+            affine_config = runtime_context.config.user.scene_affine_dispatch
+            scheduler = DaemonScheduler(
+                pools=runtime_context.pools,
+                runtime=worker_runtime,
+                scene_affine_dispatch=affine_config,
+                max_rollout_retries=runtime_context.config.user.max_rollout_retries,
+                rollouts_dir=os.path.join(self._log_dir, "rollouts"),
+            )
+        except Exception:
+            if worker_runtime is not None:
+                await worker_runtime.stop()
+            raise
+
+        try:
+            if affine_config.enabled:
+                await scheduler.warm_start()
+        except BaseException:
+            await scheduler.shutdown(reason="warm_start failed")
+            await worker_runtime.stop()
+            raise
 
         self._version_ids = runtime_context.version_ids
-        self._scene_id_to_artifact_path = runtime_context.scene_id_to_artifact_path
+        self._runtime_context = runtime_context
         self._worker_runtime = worker_runtime
         self._scheduler = scheduler
         self._started = True
+
+    async def get_runtime_info(self) -> runtime_pb2.RuntimeInfo:
+        """Return static runtime discovery information for server clients."""
+        if not self._started:
+            raise DaemonUnavailableError("daemon is not started")
+        assert self._runtime_context is not None
+
+        return build_runtime_info(
+            runtime_context=self._runtime_context,
+            version_ids=self.version_ids,
+        )
 
     async def simulate(
         self,
@@ -252,7 +347,11 @@ class DaemonEngine:
         assert self._scheduler is not None
 
         request_id = uuid4().hex
-        jobs = build_pending_jobs_from_request(request, self._scene_id_to_artifact_path)
+
+        try:
+            jobs = build_pending_jobs_from_request(request, request_id, self._has_scene)
+        except UnknownSceneError as exc:
+            raise InvalidRequestError(str(exc)) from exc
 
         driver_pool: AddressPool | None = None
         if request.available_drivers:

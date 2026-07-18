@@ -1,6 +1,6 @@
 [project]
 name = "alpasim_workspace"
-version = "0.66.0"
+version = "0.111.0"
 description = "Workspace for Alpamayo Sim development"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
@@ -19,6 +19,7 @@ physics = ["alpasim-physics"]
 tools = ["alpasim-tools"]
 driver = ["alpasim_driver"]
 wizard = ["alpasim_wizard"]
+trafficsim = ["alpasim-trafficsim"]
 
 # -- Composite extras --
 # All core (non-plugin) packages
@@ -33,6 +34,7 @@ all = [
   "alpasim-tools",
   "alpasim_driver",
   "alpasim_wizard",
+  "alpasim-trafficsim",
 ]
 
 # -- Plugin and experiment extras --
@@ -55,6 +57,7 @@ members = [
   "src/physics",
   "src/tools",
   "src/driver",
+  "src/trafficsim",
   "plugins/*",
 ]
 
@@ -70,6 +73,8 @@ alpasim-tools = { workspace = true }
 alpasim_driver = { workspace = true }
 alpasim_transfuser = { workspace = true }
 alpasim_wizard = { workspace = true }
+trajdata-alpasim = { git = "https://github.com/NVlabs/trajdata", rev = "a0c1310c5fba190c181c6fb4f00c06fc5c77b417" }
+alpasim-trafficsim = { workspace = true }
 
 [tool.uv]
 python-preference = "managed"
@@ -90,6 +95,14 @@ override-dependencies = [
   # vam pins torchmetrics==1.4.3, alpamayo-r1 pins torchmetrics==1.8.2.
   # Override to the newer version; vam works fine with 1.8.2.
   "torchmetrics>=1.8.2",
+  # `lightning` (transitive via vam==2.4.0) is quarantined on PyPI after the
+  # April 30 2026 supply-chain compromise of versions 2.6.2/2.6.3 (TeamPCP
+  # campaign). Project-wide quarantine blocks fresh installs of every version,
+  # including 2.4.0, breaking AlpaSim wizard daemon launches. Pull the GitHub
+  # SHA-pinned archive tarball (immune to tag retargeting, identical SHA to
+  # the git tag 2.4.0) — git+https of this repo's full history is too large
+  # to fetch reliably from the slurm runner network.
+  "lightning @ https://github.com/Lightning-AI/pytorch-lightning/archive/2129fdf3622e39ba46be4e1139af408e7e951cf3.tar.gz",
 ]
 constraint-dependencies = [
   # setuptools 82+ removed pkg_resources, which grpcio-tools 1.62.3 still needs.

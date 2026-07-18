@@ -17,6 +17,8 @@ import osqp
 import scipy.linalg
 import scipy.sparse as sparse
 from alpasim_controller.mpc_controller import (
+    DEFAULT_DT_MPC,
+    DEFAULT_N_HORIZON,
     ControllerInput,
     ControllerOutput,
     MPCController,
@@ -56,6 +58,8 @@ class LinearMPC(MPCController):
         self,
         vehicle_params: VehicleModel.Parameters | None = None,
         gains: MPCGains | None = None,
+        n_horizon: int = DEFAULT_N_HORIZON,
+        dt_mpc: float = DEFAULT_DT_MPC,
     ):
         """Initialize the LinearMPC controller.
 
@@ -63,9 +67,13 @@ class LinearMPC(MPCController):
             vehicle_params: Vehicle parameters for dynamics model. If None,
                 uses default parameters.
             gains: Cost function weights. If None, uses default gains.
+            n_horizon: Prediction horizon length.
+            dt_mpc: MPC timestep in seconds.
         """
         self._vehicle_params = vehicle_params or VehicleModel.Parameters()
         self._gains = gains or MPCGains()
+        self._n_horizon = n_horizon
+        self._dt_mpc = dt_mpc
 
         self._qp_solver = osqp.OSQP()
 
@@ -166,11 +174,11 @@ class LinearMPC(MPCController):
         Returns:
             Reference state array (N+1, NX) with x, y, yaw populated
         """
-        x_ref = np.zeros((self.N_HORIZON + 1, self.NX))
+        x_ref = np.zeros((self._n_horizon + 1, self.NX))
 
-        dt_us = int(self.DT_MPC * 1e6)
+        dt_us = int(self._dt_mpc * 1e6)
         timestamps = np.array(
-            [timestamp_us + k * dt_us for k in range(self.N_HORIZON + 1)],
+            [timestamp_us + k * dt_us for k in range(self._n_horizon + 1)],
             dtype=np.uint64,
         )
 
@@ -182,7 +190,7 @@ class LinearMPC(MPCController):
         ref_interp = ref_trajectory.interpolate(timestamps.astype(np.uint64))
 
         # Extract x, y, yaw for all horizon steps
-        for k in range(self.N_HORIZON + 1):
+        for k in range(self._n_horizon + 1):
             pose = ref_interp.get_pose(k)
             x_ref[k, self.IX] = pose.vec3[0]
             x_ref[k, self.IY] = pose.vec3[1]
@@ -204,14 +212,13 @@ class LinearMPC(MPCController):
             B_d: Discrete-time input matrix (NX, NU)
         """
         params = self._vehicle_params
-        dt = self.DT_MPC
+        dt = self._dt_mpc
 
         # Extract operating point values
         yaw = x_op[self.IYAW]
         v_cg_x = x_op[self.IVX]
         v_cg_y = x_op[self.IVY]
         yaw_rate = x_op[self.IYAW_RATE]
-        steering = x_op[self.ISTEERING]
 
         # Use kinematic model at low speeds
         use_kinematic = v_cg_x < params.kinematic_threshold_speed
@@ -224,7 +231,7 @@ class LinearMPC(MPCController):
         sin_yaw = math.sin(yaw)
 
         if use_kinematic:
-            # Kinematic model linearization
+            # Kinematic model linearization.
             A[self.IX, self.IYAW] = -v_cg_x * sin_yaw
             A[self.IX, self.IVX] = cos_yaw
 
@@ -234,14 +241,14 @@ class LinearMPC(MPCController):
             A[self.IYAW, self.IYAW_RATE] = 1.0
             A[self.IVX, self.IACCEL] = 1.0
 
+            # Freeze v_cg_x as a scheduling parameter. Adding its product derivatives
+            # without an affine residual would double the operating-point terms.
             GAIN = 10.0
             l_r = params.l_rig_to_cg
             L = params.wheelbase
-            A[self.IVY, self.IVX] = GAIN * steering * l_r / L
             A[self.IVY, self.IVY] = -GAIN
             A[self.IVY, self.ISTEERING] = GAIN * v_cg_x * l_r / L
 
-            A[self.IYAW_RATE, self.IVX] = GAIN * steering / L
             A[self.IYAW_RATE, self.ISTEERING] = GAIN * v_cg_x / L
             A[self.IYAW_RATE, self.IYAW_RATE] = -GAIN
 
@@ -341,7 +348,7 @@ class LinearMPC(MPCController):
             u_opt: Optimal first control input (NU,)
             status: Solver status string
         """
-        N = self.N_HORIZON
+        N = self._n_horizon
         nx = self.NX
         nu = self.NU
 

@@ -5,13 +5,14 @@
 # This is lower perf than the default but easier to analyze for performance.
 
 defines:
-  nre_cache_size: 3  # sensorsim.n_concurrent_rollouts + 1
+  nre_cache_size: 3  # renderer.n_concurrent_rollouts + 1
+
+trafficsim:
+  server:
+    max_workers: 10
 
 services:
-  sensorsim:
-    environments:
-      - OMP_NUM_THREADS=1
-
+  renderer:
     gpus: [3, 4, 5, 6, 7]
     replicas_per_container: 1
 
@@ -35,12 +36,12 @@ runtime:
   nr_workers: 1
   endpoints:
     # Total capacity per service = nr_gpus x replicas_per_container x n_concurrent_rollouts
-    # SENS: 5 x 1 x 2  = 10
+    # REND: 5 x 1 x 2  = 10
     # DRIV: 1 x 1 x 10 = 10
     # PHYS: 1 x 1 x 10 = 10
     # CONT: 1 (CPU) x 1 x 10 = 10
     # TRAF: 1 x 1 x 10 = 10
-    sensorsim:
+    renderer:
       n_concurrent_rollouts: 2
 
     driver:
@@ -52,8 +53,6 @@ runtime:
 
     controller:
       n_concurrent_rollouts: 10
-      skip: false
 
     trafficsim:
       n_concurrent_rollouts: 10
-      skip: false

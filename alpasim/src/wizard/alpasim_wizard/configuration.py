@@ -8,18 +8,28 @@ from __future__ import annotations
 import datetime
 import logging
 import os
+import socket
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, cast
 
 from alpasim_wizard.context import WizardContext
-from alpasim_wizard.schema import AlpasimConfig
+from alpasim_wizard.schema import AlpasimConfig, RunMode
+from alpasim_wizard.telemetry.prometheus import generate_prometheus_configs
 from omegaconf import OmegaConf
 
 from .services import ContainerDefinition, ContainerSet
-from .utils import save_loadable_wizard_config, write_yaml
+from .utils import read_yaml, save_loadable_wizard_config, write_yaml
 
 logger = logging.getLogger(__name__)
+
+CORE_SERVICE_NAMES = (
+    "driver",
+    "renderer",
+    "physics",
+    "trafficsim",
+    "controller",
+)
 
 
 class ConfigurationManager:
@@ -27,11 +37,9 @@ class ConfigurationManager:
 
     def __init__(self, log_dir: str):
         self.log_dir = Path(log_dir)
-        self.generated_configs: Dict[str, Path] = {}
+        self._central_file_sd_path: Path | None = None
 
-    def generate_all(
-        self, container_set: ContainerSet, context: WizardContext
-    ) -> Dict[str, Path]:
+    def generate_all(self, container_set: ContainerSet, context: WizardContext) -> None:
         """Generate all required configurations.
 
         Args:
@@ -41,36 +49,77 @@ class ConfigurationManager:
         logger.info("Generating all configurations...")
 
         cfg = context.cfg
-        artifact_list = context.get_artifacts()
+        artifact_list = context.artifact_list
+
+        run_metadata = self._load_or_create_run_metadata(cfg)
+        self._write_config("run_metadata.yaml", run_metadata)
 
         # Generate each configuration
-        self._generate_runtime_config(cfg, artifact_list)
+        self._generate_runtime_config(cfg, artifact_list, context)
 
         # Get sim containers from service_manager for network config
         sim_containers = container_set.sim
         self._generate_network_config(sim_containers, cfg)
+        self._generate_runtime_server_config(container_set, cfg)
 
         self._generate_trafficsim_config(cfg)
         self._generate_eval_config(cfg)
-        self._generate_run_metadata(cfg)
+        self._central_file_sd_path = generate_prometheus_configs(
+            self.log_dir,
+            run_metadata,
+            context,
+        )
         self._generate_driver_config(cfg)
+        self._generate_controller_config(cfg)
 
         # Save wizard config
         self._save_wizard_config(cfg)
 
-        logger.info(f"Generated {len(self.generated_configs)} configuration files")
-        return self.generated_configs
+        logger.info("Generated configuration files")
 
     def _generate_runtime_config(
-        self, cfg: Any, artifact_list: List[Any]
+        self,
+        cfg: Any,
+        artifact_list: List[Any],
+        context: WizardContext,
     ) -> str | None:
         """Generate runtime configuration."""
         runtime_config = OmegaConf.to_container(cfg.runtime, resolve=True)
         runtime_config = self._remove_none_values(runtime_config)
+        assert isinstance(runtime_config, dict)
+
+        sceneset_path = getattr(getattr(cfg, "scenes", None), "sceneset_path", None)
+        if sceneset_path is not None:
+            scene_provider = runtime_config.get("scene_provider")
+            if (
+                isinstance(scene_provider, dict)
+                and scene_provider.get("kind") == "usdz"
+                and isinstance(scene_provider.get("usdz"), dict)
+            ):
+                scene_provider["usdz"]["data_dir"] = (
+                    "/mnt/nre-data"
+                    if sceneset_path == "."
+                    else f"/mnt/nre-data/{sceneset_path}"
+                )
 
         # Write simulation params directly (was: fan out per scene)
         simulation_config = runtime_config.pop("simulation_config", {})
+        telemetry_ports = context.telemetry_ports
+        prometheus_host = (
+            "localhost"
+            if cfg.wizard.debug_flags.use_localhost
+            or cfg.wizard.run_method.name == "SLURM"
+            else "prometheus-0"
+        )
         runtime_config["simulation_config"] = simulation_config
+        runtime_config["prometheus"] = {
+            "worker_ports": list(telemetry_ports.workers),
+            "url": (
+                f"http://{prometheus_host}:{telemetry_ports.prometheus}"
+                if cfg.wizard.prometheus.start_prometheus
+                else None
+            ),
+        }
 
         # Write flat scene list
         runtime_config["scenes"] = [{"scene_id": s.scene_id} for s in artifact_list]
@@ -97,58 +146,109 @@ class ConfigurationManager:
         """
 
         network_config: Dict[str, Any] = {
-            "driver": {"addresses": []},
-            "physics": {"addresses": []},
-            "sensorsim": {"addresses": []},
-            "trafficsim": {"addresses": []},
-            "controller": {"addresses": []},
+            "driver": {"endpoints": []},
+            "physics": {"endpoints": []},
+            "renderer": {"endpoints": []},
+            "trafficsim": {"endpoints": []},
+            "controller": {"endpoints": []},
         }
 
         for c in service_containers:
             for inst in c.service_instances:
-                # A special configuration has been requested, where the sensorsim and
+                # A special configuration has been requested, where the renderer and
                 # physics service exist in the same process/at the same port. This logical
                 # branch handles that mapping.
-                if c.name == "physics" and inst.service_config.image == "*sensorsim*":
-                    logger.info("Mapping the physics service to sensorsim addresses")
-                    # get the sensorsim container
-                    sensorsim_containers = [
-                        sc for sc in service_containers if sc.name == "sensorsim"
+                if c.name == "physics" and inst.service_config.image == "*renderer*":
+                    logger.info("Mapping the physics service to renderer addresses")
+                    renderer_containers = [
+                        sc for sc in service_containers if sc.name == "renderer"
                     ]
-                    if (len(sensorsim_containers) != 1) or (
-                        len(sensorsim_containers[0].get_all_addresses()) != 1
+                    if (len(renderer_containers) != 1) or (
+                        len(renderer_containers[0].get_all_addresses()) != 1
                     ):
                         raise ValueError(
-                            "Expected exactly one sensorsim container/address"
+                            "Expected exactly one renderer container/address"
                         )
-                    sensorsim_address = sensorsim_containers[0].get_all_addresses()[0]
+                    renderer_address = renderer_containers[0].get_all_addresses()[0]
                     if inst.address is None:
                         raise ValueError("Physics service must have an address defined")
-                    inst.address.port = sensorsim_address.port
-                    logger.info("Mapped physics to sensorsim at %s", inst.address)
+                    inst.address.host = renderer_address.host
+                    inst.address.port = renderer_address.port
+                    logger.info("Mapped physics to renderer at %s", inst.address)
 
                 elif inst.address is None:
                     continue
 
-                if c.name in network_config:
-                    network_config[c.name]["addresses"].append(str(inst.address))
+                network_service_name = c.name
+                if network_service_name in network_config:
+                    address = str(inst.address)
+                    network_config[network_service_name]["endpoints"].append(
+                        {"address": address, "managed": True}
+                    )
 
-        # Add external service addresses (for services running outside the deployment)
-        external_services = cfg.wizard.external_services
-        if external_services is not None:
+        # Add external service addresses (for services running outside the deployment).
+        # Unknown service names are routed into extra_services so plugin-owned
+        # endpoints stay out of the core public schema.
+        external_services_raw: Any = cfg.wizard.external_services
+        if external_services_raw is not None and OmegaConf.is_config(
+            external_services_raw
+        ):
+            external_services_raw = OmegaConf.to_container(
+                external_services_raw,
+                resolve=True,
+            )
+        if external_services_raw is not None:
+            external_services = cast(dict[str, list[str]], external_services_raw)
             for service_name, addresses in external_services.items():
-                if service_name in network_config:
-                    network_config[service_name]["addresses"].extend(addresses)
-                    logger.info(
-                        "Added external %s addresses: %s", service_name, addresses
+                if service_name not in CORE_SERVICE_NAMES:
+                    raise ValueError(
+                        f"Unknown external service {service_name!r}; expected one of "
+                        f"{CORE_SERVICE_NAMES}"
                     )
-                else:
-                    logger.warning(
-                        "Unknown external service '%s', skipping", service_name
-                    )
+                target = network_config[service_name]
+                target["endpoints"].extend(
+                    {"address": address, "managed": False} for address in addresses
+                )
+                logger.info("Added external %s addresses: %s", service_name, addresses)
 
         self._write_config("generated-network-config.yaml", network_config)
         logger.debug("Generated network config")
+
+    def _generate_runtime_server_config(
+        self,
+        container_set: ContainerSet,
+        cfg: AlpasimConfig,
+    ) -> None:
+        """Generate client-facing runtime daemon endpoint metadata.
+
+        A wildcard runtime address means the runtime binds on the deployment
+        node, so this process' hostname is used as the client endpoint. Other
+        current backends store internal service names here and publish the
+        runtime on localhost.
+        """
+        if cfg.wizard.run_mode != RunMode.SERVER:
+            return
+
+        runtime_container = container_set.runtime
+        if runtime_container is None:
+            raise ValueError(
+                "Server mode requires `runtime` in wizard.run_sim_services"
+            )
+
+        runtime_addresses = runtime_container.get_all_addresses()
+        if not runtime_addresses:
+            raise ValueError("Runtime server mode requires a runtime address")
+
+        runtime_address = runtime_addresses[0]
+        client_host = (
+            socket.gethostname() if runtime_address.host == "0.0.0.0" else "localhost"
+        )
+        endpoint = {
+            "host": client_host,
+            "port": runtime_address.port,
+        }
+        self._write_config("generated-runtime-server.yaml", endpoint)
+        logger.debug("Generated runtime server endpoint")
 
     def _generate_trafficsim_config(self, cfg: Any) -> None:
         """Generate traffic simulation configuration."""
@@ -183,9 +283,33 @@ class ConfigurationManager:
         self._write_config("driver-config.yaml", driver_config)
         logger.debug("Generated driver config")
 
-    def _generate_run_metadata(self, cfg: Any) -> None:
-        """Generate run metadata."""
-        run_uuid = uuid.uuid4()
+    def _generate_controller_config(self, cfg: Any) -> None:
+        """Generate controller configuration."""
+        if not hasattr(cfg, "controller"):
+            return
+
+        controller_config = OmegaConf.to_container(cfg.controller, resolve=True)
+        assert isinstance(controller_config, dict)
+
+        self._write_config("controller-config.yaml", controller_config)
+        logger.debug("Generated controller config")
+
+    def _load_or_create_run_metadata(self, cfg: Any) -> dict[str, Any]:
+        """Load existing run metadata, or create it for a new run.
+
+        Makes sure e.g. run_uuid stays the same across restarts of the same run.
+        """
+        metadata_path = self.log_dir / "run_metadata.yaml"
+        if metadata_path.exists():
+            run_metadata = read_yaml(str(metadata_path))
+            run_metadata.setdefault("run_uuid", str(uuid.uuid4()))
+            return run_metadata
+
+        run_uuid = (
+            uuid.UUID(cfg.wizard.prometheus.run_uuid)
+            if cfg.wizard.prometheus.run_uuid
+            else uuid.uuid4()
+        )
         run_name = (
             cfg.wizard.run_name
             or os.environ.get("SLURM_JOB_NAME", None)
@@ -212,9 +336,7 @@ class ConfigurationManager:
                 else None
             ),
         }
-
-        self._write_config("run_metadata.yaml", run_metadata)
-        logger.debug("Generated run metadata")
+        return run_metadata
 
     def _save_wizard_config(self, cfg: Any) -> None:
         """Save the complete wizard configuration."""
@@ -232,9 +354,22 @@ class ConfigurationManager:
     def _write_config(self, filename: str, data: Dict) -> Path:
         """Write configuration to file."""
         filepath = self.log_dir / filename
+        filepath.parent.mkdir(parents=True, exist_ok=True)
         write_yaml(data, str(filepath))
-        self.generated_configs[filename] = filepath
         return filepath
+
+    def cleanup_central_file_sd(self) -> None:
+        """Remove this run's central file-SD publication after deployment exits."""
+        if self._central_file_sd_path is None:
+            return
+        try:
+            self._central_file_sd_path.unlink(missing_ok=True)
+        except OSError as exc:
+            logger.warning(
+                "Failed to remove Prometheus file-SD %s: %s",
+                self._central_file_sd_path,
+                exc,
+            )
 
     def _remove_none_values(self, d: Any) -> Any:
         """Recursively remove all keys with None values from the dictionary."""

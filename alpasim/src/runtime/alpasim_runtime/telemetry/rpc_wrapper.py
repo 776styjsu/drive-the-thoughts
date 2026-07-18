@@ -11,20 +11,28 @@ then call set_shared_rpc_tracking() in each worker with the returned values.
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import threading
 import time
+from collections.abc import Sequence
 from contextlib import AbstractContextManager
 from multiprocessing import Manager
 from multiprocessing.managers import SyncManager
-from typing import Any, Awaitable, Callable, MutableMapping
+from typing import Any, Callable, MutableMapping
 
-from .telemetry_context import get_telemetry_tag, try_get_context
+import grpc
+
+from .telemetry_context import try_get_context
+
+logger = logging.getLogger(__name__)
 
 # Type alias for lock-like objects (context managers)
 LockLike = AbstractContextManager[bool]
 
 # Tuple type for passing shared state between processes
 SharedRpcTracking = tuple[MutableMapping[str, int], LockLike]
+
 
 # Module-level state - defaults to local dict, can be upgraded to shared
 _active_rpc_counts: MutableMapping[str, int] = {}
@@ -84,15 +92,43 @@ def _decrement_count(service_type: str) -> None:
         )
 
 
+def _is_transient_error(
+    exc: grpc.aio.AioRpcError,
+    transient_error_details: Sequence[str],
+) -> bool:
+    """Match transport failures or allowlisted server-side transient details."""
+    if exc.code() == grpc.StatusCode.UNAVAILABLE:
+        return True
+    if exc.code() not in (
+        grpc.StatusCode.UNKNOWN,
+        grpc.StatusCode.DEADLINE_EXCEEDED,
+    ):
+        return False
+    details = exc.details() or ""
+    return any(pattern in details for pattern in transient_error_details)
+
+
 async def profiled_rpc_call(
     method_name: str,
     service_type: str,
-    stub_call: Callable[..., Awaitable[Any]],
+    stub_call: Callable[..., grpc.aio.UnaryUnaryCall[Any, Any]],
     *args: Any,
+    retry_delays_s: Sequence[float] = (),
+    transient_error_details: Sequence[str] = (),
     **kwargs: Any,
 ) -> Any:
     """
     Wrapper that captures RPC metrics.
+
+    Args:
+        method_name: RPC method name used in metrics and logs.
+        service_type: Service name used in metrics and logs.
+        stub_call: gRPC callable to invoke.
+        *args: Positional arguments forwarded to `stub_call`.
+        retry_delays_s: Delays before successive transient-error retries.
+        transient_error_details: Server error detail substrings. An error is
+            retryable when its details contain any entry in this sequence.
+        **kwargs: Keyword arguments forwarded to `stub_call`.
 
     Usage:
         result = await profiled_rpc_call(
@@ -101,7 +137,50 @@ async def profiled_rpc_call(
 
     If not inside a TelemetryContext, the call still executes but no metrics
     are recorded.
+
+    Each delay in `retry_delays_s` grants one retry after a transient failure:
+    UNAVAILABLE, or UNKNOWN/DEADLINE_EXCEEDED whose details match an entry in
+    `transient_error_details` (for known server-side transient failures).
     """
+    for delay_s in retry_delays_s:
+        try:
+            return await _profiled_rpc_call_once(
+                method_name,
+                service_type,
+                stub_call,
+                *args,
+                **kwargs,
+            )
+        except grpc.aio.AioRpcError as exc:
+            if not _is_transient_error(exc, transient_error_details):
+                raise
+            logger.warning(
+                "%s RPC %s failed with %s; retrying in %.1fs: %s",
+                service_type,
+                method_name,
+                exc.code().name,
+                delay_s,
+                exc.details(),
+            )
+            await asyncio.sleep(delay_s)
+
+    return await _profiled_rpc_call_once(
+        method_name,
+        service_type,
+        stub_call,
+        *args,
+        **kwargs,
+    )
+
+
+async def _profiled_rpc_call_once(
+    method_name: str,
+    service_type: str,
+    stub_call: Callable[..., grpc.aio.UnaryUnaryCall[Any, Any]],
+    *args: Any,
+    **kwargs: Any,
+) -> Any:
+    """Execute one profiled RPC attempt."""
     ctx = try_get_context()
 
     fut = stub_call(*args, **kwargs)
@@ -131,17 +210,12 @@ async def profiled_rpc_call(
         duration = t_resume - t_start
 
         if ctx is not None:
-            tag = get_telemetry_tag()
-            ctx.rpc_queue_depth.labels(service=service_type, tag=tag).observe(
-                queue_depth_at_start
+            ctx.record_rpc(
+                service=service_type,
+                method=method_name,
+                queue_depth_at_start=queue_depth_at_start,
+                duration_seconds=duration,
+                blocking_seconds=(
+                    max(0, t_resume - t_done) if t_done is not None else None
+                ),
             )
-            ctx.rpc_duration.labels(
-                service=service_type, method=method_name, tag=tag
-            ).observe(duration)
-
-            # Only record blocking time if callback was successfully registered
-            if t_done is not None:
-                blocking = max(0, t_resume - t_done)
-                ctx.rpc_blocking.labels(
-                    service=service_type, method=method_name, tag=tag
-                ).observe(blocking)

@@ -5,7 +5,7 @@ Alpasim depends on access to the following:
 - Hugging Face access
   - Used for downloading simulation artifacts
   - Data is
-    [here](https://huggingface.co/datasets/nvidia/PhysicalAI-Autonomous-Vehicles-NuRec/tree/main/sample_set/25.07_release)
+    [here](https://huggingface.co/datasets/nvidia/PhysicalAI-Autonomous-Vehicles-NuRec/tree/26.01/sample_set/26.01_release)
   - See info on data
     [here](https://huggingface.co/datasets/nvidia/PhysicalAI-Autonomous-Vehicles-NuRec/blob/main/README.md#dataset-format)
     for more information on the contents of artifacts used to define scenes
@@ -15,8 +15,9 @@ Alpasim depends on access to the following:
     [nvidia/PhysicalAI-Autonomous-Vehicles-NuRec](https://huggingface.co/datasets/nvidia/PhysicalAI-Autonomous-Vehicles-NuRec).
     Without this, scene downloads will fail with a `GatedRepoError`.
   - Once you have the token, set it as an environment variable: `export HF_TOKEN=<token>`
-- A version of `uv` installed (see [here](https://docs.astral.sh/uv/getting-started/installation/))
+- `uv` version `0.9.17` or newer installed (see [here](https://docs.astral.sh/uv/getting-started/installation/))
   - Example installation command for Ubuntu: `curl -LsSf https://astral.sh/uv/install.sh | sh`.
+  - If `uv` is already installed, you can upgrade it with `uv self update`.
 - Rust toolchain (`cargo`) for building `utils_rs`, a compiled extension that accelerates trajectory
   transformations and interpolations in the runtime. Install via
   [rustup](https://rustup.rs/) or interactively let `setup_local_env.sh` install it for you.
@@ -32,6 +33,23 @@ Alpasim depends on access to the following:
     570.x).
 - Install the NVIDIA Container Toolkit (see
   [here](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html))
+
+## Optional: OmniDreams video-model renderer
+
+The default AlpaSim tutorial uses NuRec. To use
+[OmniDreams](https://github.com/nv-tlabs/omni-dreams) as the renderer backend, follow the
+[Video Model Renderer guide](VIDEO_MODEL.md) after completing the base setup above.
+
+Additional requirements for this path:
+
+- A [FlashDreams](https://github.com/NVIDIA/flashdreams) checkout and a locally built
+  `flashdreams-alpasim:local` image for `deploy=managed_flashdreams`, or access to an external
+  OmniDreams gRPC server for `deploy=external_video_model`.
+- Hugging Face authentication for any gated OmniDreams, FlashDreams, driver, or scene assets needed
+  by the selected run.
+- Enough GPU memory for both the renderer and the selected driver. The managed FlashDreams preset
+  currently requires about 48 GB VRAM with the lightweight public single-view driver preset and
+  about 96 GB VRAM with the Alpamayo1.5 single-camera preset.
 
 ## Dependency management
 
@@ -85,6 +103,16 @@ ensure no other process is using the assigned ports.
 **`setup_local_env.sh` fails silently in non-interactive environments**
 The script only installs Rust when a TTY is detected. To install Rust manually,
 use: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y`
+
+**`uv` parse error on `exclude-newer = "3 days"`**
+Your `uv` is older than 0.9.17 and can't parse the relative cooldown in the root
+`pyproject.toml`. Don't delete the line (it's an intentional supply-chain
+safeguard); upgrade instead with `uv self update`.
+
+**`ModuleNotFoundError` (e.g. `alpasim_grpc.v0.*_pb2`) in the service containers**
+The git-ignored gRPC stubs are missing on the host, and the volume-mounted source
+tree shadows the stubs baked into the images. Run `source setup_local_env.sh` (or
+`cd src/grpc && uv run compile-protos`) to generate them.
 
 ## Next steps
 

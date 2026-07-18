@@ -5,11 +5,44 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 from numpy.typing import NDArray
 
 def version() -> str:
     """Returns the version of this Rust extension."""
+    ...
+
+def build_drive_response_bytes(
+    time_now_us: int,
+    xyz: NDArray[np.float32],
+    quat_wxyz: NDArray[np.float32],
+    dt_us: NDArray[np.int64],
+) -> bytes:
+    """
+    Build serialized egodriver DriveResponse bytes from trajectory arrays.
+
+    :param time_now_us: Base simulator timestamp in microseconds.
+    :param xyz: Array of shape (N, 3) with position rows.
+    :param quat_wxyz: Array of shape (N, 4) with proto-order quaternions.
+    :param dt_us: Array of shape (N,) with timestamp offsets in microseconds.
+    """
+    ...
+
+def pack_trajectory_arrays(
+    trajectory: Any,
+) -> tuple[NDArray[np.int64], NDArray[np.float32], NDArray[np.float32]]:
+    """
+    Pack a proto-like trajectory into timestamp, xyz, and quat_wxyz arrays.
+
+    Returned rows are sorted by timestamp, and quaternions are in proto order
+    [w, x, y, z].
+    """
+    ...
+
+def pack_route_array(route: Any) -> tuple[int, NDArray[np.float32]]:
+    """Pack a proto-like route into its timestamp and waypoint xyz array."""
     ...
 
 class Pose:
@@ -97,6 +130,15 @@ class Pose:
         Compute the inverse of this pose.
 
         If self transforms A -> B, then inverse transforms B -> A.
+        """
+        ...
+
+    def blend(self, other: Pose, alpha: float) -> Pose:
+        """
+        Blend this pose with another pose.
+
+        Positions are linearly interpolated and rotations use spherical linear
+        interpolation. Alpha is clamped to [0, 1].
         """
         ...
 
@@ -329,6 +371,19 @@ class Trajectory:
         """
         ...
 
+    def blend(
+        self,
+        other: Trajectory,
+        alpha: float | NDArray[np.floating],
+    ) -> Trajectory:
+        """
+        Blend this trajectory with another trajectory.
+
+        The trajectories must have identical timestamps. Alpha may be a scalar
+        or a 1D float array with one value per pose. Values are clamped to [0, 1].
+        """
+        ...
+
     def clip(self, start_us: int, end_us: int) -> Trajectory:
         """
         Clip the trajectory to a time range, interpolating at boundaries.
@@ -507,6 +562,21 @@ class Polyline:
 
         :param distances: 1D array of distances along the polyline.
         :return: 2D array of shape (M, D) with interpolated positions.
+        """
+        ...
+
+    def resample_by_spacing(
+        self,
+        spacing: float,
+        include_endpoint: bool = True,
+    ) -> Polyline:
+        """
+        Uniformly resample the full polyline by arc-length spacing.
+
+        :param spacing: Distance between samples.
+        :param include_endpoint: Append the final waypoint if it does not land
+            on the spacing grid.
+        :return: A new Polyline with resampled points.
         """
         ...
 

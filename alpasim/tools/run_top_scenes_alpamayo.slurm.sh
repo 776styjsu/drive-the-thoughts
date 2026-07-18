@@ -20,14 +20,14 @@
 #SBATCH --partition=gpu
 #SBATCH --mem=16G
 #SBATCH -J "alpamayo_run"
-#SBATCH --account=your_hpc_account
+#SBATCH --account=elbaumhpc
 #SBATCH --output=logs/alpamayo_run_%A_%a.out
 #SBATCH --error=logs/alpamayo_run_%A_%a.err
 
 set -euo pipefail
 
 # ---------- Config (override via sbatch --export=ALL,NAME=value,...) ----------
-REPO_ROOT="${REPO_ROOT:-<alpasim-source-root>}"
+REPO_ROOT="${REPO_ROOT:-/project/AV/alpasim}"
 CSV_PATH="${CSV_PATH:-data/scenes/sim_scenes_monitor_resample_actionable.csv}"
 TOP_N="${TOP_N:-100}"
 START_INDEX="${START_INDEX:-0}"

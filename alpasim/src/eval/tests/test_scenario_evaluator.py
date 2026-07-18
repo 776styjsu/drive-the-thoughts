@@ -17,7 +17,7 @@ from conftest import SimpleScenarioEvaluator, create_test_eval_config
 
 from eval.accumulator import EvalDataAccumulator
 from eval.asl_loader import load_scenario_eval_input_from_asl
-from eval.data import AggregationType, MetricReturn, ScenarioEvalInput
+from eval.data import AggregationType, MetricReturn, ScenarioEvalInput, SimulationResult
 from eval.scenario_evaluator import ScenarioEvalResult
 from eval.schema import EvalConfig
 
@@ -74,6 +74,44 @@ def minimal_eval_input(
     )
 
 
+def test_gt_dist_traveled_is_full_recording_distance(
+    minimal_eval_input: ScenarioEvalInput,
+    default_eval_config: EvalConfig,
+) -> None:
+    evaluator = SimpleScenarioEvaluator(default_eval_config)
+    result = evaluator.evaluate(minimal_eval_input)
+
+    gt_dist_metric = next(
+        metric
+        for metric in result.timestep_metrics
+        if metric.name == "gt_dist_traveled_m"
+    )
+
+    # The fixture is a 10-point straight line from x=0 through x=9.
+    # This value must be invariant per timestep so downstream row-removal
+    # modifiers cannot turn a long scene into a short-scene score override.
+    assert gt_dist_metric.values == pytest.approx([9.0] * 10)
+    assert result.aggregated_metrics["gt_dist_traveled_m"] == pytest.approx(9.0)
+
+
+def test_first_driven_timestamp_uses_render_anchor(
+    minimal_eval_input: ScenarioEvalInput,
+    default_eval_config: EvalConfig,
+) -> None:
+    """Handover is anchored on render_start + force_gt, independent of the gap."""
+    minimal_eval_input.force_gt_duration_us = 200_000
+    minimal_eval_input.session_metadata.render_start_timestamp_us = 250_000
+
+    simulation_result = SimulationResult.from_scenario_input(
+        minimal_eval_input, default_eval_config
+    )
+
+    assert simulation_result.first_driven_timestamp_us == (
+        minimal_eval_input.session_metadata.render_start_timestamp_us
+        + minimal_eval_input.force_gt_duration_us
+    )
+
+
 class SimpleScenarioEvaluatorClass:
     """Test the ScenarioEvaluator class.
 
@@ -115,6 +153,26 @@ class SimpleScenarioEvaluatorClass:
         assert isinstance(result.timestep_metrics, list)
         assert isinstance(result.aggregated_metrics, dict)
         assert result.metrics_df is not None
+
+    def test_ground_truth_progress_metrics_are_additive(
+        self, minimal_eval_input: ScenarioEvalInput, default_eval_config: EvalConfig
+    ) -> None:
+        """Test that legacy progress metrics remain alongside scene-score progress."""
+        evaluator = SimpleScenarioEvaluator(default_eval_config)
+        result = evaluator.evaluate(minimal_eval_input)
+
+        metrics_by_name = {metric.name: metric for metric in result.timestep_metrics}
+
+        assert metrics_by_name["progress"].time_aggregation == AggregationType.LAST
+        assert (
+            metrics_by_name["progress_rel_to_total"].time_aggregation
+            == AggregationType.LAST
+        )
+        assert metrics_by_name["progress_rel"].time_aggregation == AggregationType.MIN
+        assert (
+            metrics_by_name["progress"].values
+            == metrics_by_name["progress_rel_to_total"].values
+        )
 
     def test_evaluate_returns_collision_metrics(
         self, minimal_eval_input: ScenarioEvalInput, default_eval_config: EvalConfig
@@ -367,6 +425,16 @@ def _build_actor_poses_messages(simulation_data: dict[str, Any]) -> list[ActorPo
     return messages
 
 
+def _build_driver_request_message(simulation_data: dict[str, Any]) -> LogEntry:
+    """Build the first policy driver request for synthetic rollout data."""
+    first_policy_us = int(simulation_data["timestamps"][0])
+    control_timestep_us = int(simulation_data["session_metadata"].control_timestep_us)
+    entry = LogEntry()
+    entry.driver_request.time_now_us = first_policy_us
+    entry.driver_request.time_query_us = first_policy_us + control_timestep_us
+    return entry
+
+
 def _populate_accumulator(
     accumulator: EvalDataAccumulator, simulation_data: dict[str, Any]
 ) -> None:
@@ -378,6 +446,7 @@ def _populate_accumulator(
     # Feed rollout_metadata
     metadata = _build_rollout_metadata(simulation_data)
     accumulator.handle_message(LogEntry(rollout_metadata=metadata))
+    accumulator.handle_message(_build_driver_request_message(simulation_data))
 
     # Feed actor_poses
     for actor_poses in _build_actor_poses_messages(simulation_data):
@@ -466,6 +535,7 @@ class TestRuntimeVsPostEvalEquivalence:
             # Write rollout metadata (must be first message)
             metadata = _build_rollout_metadata(simulation_data)
             await log_writer.on_message(LogEntry(rollout_metadata=metadata))
+            await log_writer.on_message(_build_driver_request_message(simulation_data))
 
             # Write actor poses for each timestep
             for actor_poses in _build_actor_poses_messages(simulation_data):

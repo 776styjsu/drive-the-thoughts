@@ -411,21 +411,32 @@ class DriverResponseAtTime:
     reasoning_text: str | None = None
 
     @staticmethod
-    def _extract_debug_extra(driver_response: DriveResponse) -> dict | None:
-        """Extract and unpickle the debug *extra* dict from a driver response.
+    def _extract_debug_extra(
+        driver_response: DriveResponse,
+        parse_unstructured_debug_info: bool = False,
+    ) -> dict | None:
+        """Extract the debug *extra* dict from a driver response when enabled.
+
+        Parsing ``unstructured_debug_info`` uses pickle-encoded driver-controlled
+        bytes, so it is disabled by default and should only be enabled for
+        trusted drivers.
 
         Args:
             driver_response: The :pyclass:`DriveResponse` containing the
+                ``unstructured_debug_info`` bytes.
+            parse_unstructured_debug_info: Whether to parse pickle-encoded
                 ``unstructured_debug_info`` bytes.
 
         Returns:
             The unpickled dictionary if available and valid, otherwise ``None``.
         """
+        if not parse_unstructured_debug_info:
+            return None
+
         try:
             dbg_bytes = driver_response.debug_info.unstructured_debug_info
             if not dbg_bytes:
-                # Only info, as this spams a lot
-                logger.info("No unstructured debug info found")
+                logger.debug("No unstructured debug info found")
                 return None
             extra = pickle.loads(dbg_bytes)
             if isinstance(extra, dict):
@@ -507,12 +518,20 @@ class DriverResponseAtTime:
         query_time_us: int,
         ego_raabb: RAABB,
         ego_coords_rig_to_aabb_center: geometry.Pose,
+        parse_unstructured_debug_info: bool = False,
     ) -> "DriverResponseAtTime":
-        """Helper function. Create DriverResponseAtTime from DriveResponse."""
+        """Create DriverResponseAtTime from DriveResponse.
+
+        ``unstructured_debug_info`` parsing is disabled by default because it
+        uses pickle-encoded driver-controlled bytes.
+        """
         safety_monitor_safe = None
         command_name = None
         reasoning_text = None
-        extra = DriverResponseAtTime._extract_debug_extra(driver_response)
+        extra = DriverResponseAtTime._extract_debug_extra(
+            driver_response,
+            parse_unstructured_debug_info=parse_unstructured_debug_info,
+        )
         if extra is not None:
             if "safe_trajectory" in extra:
                 safety_monitor_safe = extra["safe_trajectory"]
@@ -586,6 +605,9 @@ class DriverResponses:
     per_timestep_driver_responses: list[DriverResponseAtTime] = dataclasses.field(
         default_factory=list
     )
+    # Disabled by default because unstructured debug info is pickle-encoded
+    # driver-controlled data. Trusted callers can opt in explicitly.
+    parse_unstructured_debug_info: bool = False
     artists: dict[str, list[plt.Artist]] | None = None
     camera_artists_by_ax: dict[int, dict[str, list[plt.Artist] | plt.Artist | None]] = (
         dataclasses.field(default_factory=dict)
@@ -610,6 +632,7 @@ class DriverResponses:
                 query_time_us,
                 self.ego_raabb,
                 self.ego_coords_rig_to_aabb_center,
+                parse_unstructured_debug_info=self.parse_unstructured_debug_info,
             )
         )
 
@@ -618,13 +641,16 @@ class DriverResponses:
         ax: plt.Axes,
         time: int,
         which_time: Literal["now", "query"] = "now",
+        fallback: Literal["exact", "previous"] = "exact",
     ) -> dict[str, list[plt.Artist]]:
         """Render driver responses at a given time.
 
         Can be called repeatedly to update the driver responses to current time.
         `which_time` declares whether the `time` is the query or prediction time.
         """
-        driver_response_at_time = self.get_driver_response_for_time(time, which_time)
+        driver_response_at_time = self.get_driver_response_for_time(
+            time, which_time, fallback=fallback
+        )
         if driver_response_at_time is None:
             return {}
         # Styling information is already encoded inside each RenderableTrajectory
@@ -689,10 +715,11 @@ class DriverResponses:
         projector: "CameraProjector",
         time: int,
         which_time: Literal["now", "query"] = "now",
+        fallback: Literal["exact", "previous"] = "exact",
     ) -> list[plt.Artist]:
         """Render planner trajectories onto a camera axis."""
         driver_response_at_time = self.get_driver_response_for_time(
-            time, which_time=which_time
+            time, which_time=which_time, fallback=fallback
         )
         artists = self.camera_artists_by_ax.setdefault(
             id(ax), {"selected": None, "sampled": []}
@@ -798,33 +825,149 @@ class DriverResponses:
         return overlay_artists
 
     def get_driver_response_for_time(
-        self, time: int, which_time: Literal["now", "query"] = "now"
+        self,
+        time: int,
+        which_time: Literal["now", "query"] = "now",
+        *,
+        fallback: Literal["exact", "previous"] = "exact",
     ) -> DriverResponseAtTime | None:
-        """Note that this returns the driver response for the query time.
+        """Return the driver response matching ``time``.
 
-        I.e. not the time when the response was predicted.
+        ``which_time`` selects whether ``time`` is matched against response
+        creation timestamps (``now``) or the timestamps the responses predicted
+        from (``query``). By default, only exact timestamp matches are returned.
+        Renderers can opt into ``fallback="previous"`` to show the most recent
+        still-active response at an off-cadence video frame.
         """
         timestamps_to_search = (
             self.timestamps_us if which_time == "now" else self.query_times_us
         )
-        idx = np.searchsorted(timestamps_to_search, time)
-        # Corner case: We don't have a response for the last timestamp:
-        if (
-            which_time == "now"
-            and idx == len(timestamps_to_search)
-            and time == self.query_times_us[-1]
-        ):
+        # Empty list (e.g. session aborted before any response was recorded).
+        if not timestamps_to_search:
             return None
-        # Too early, haven't received response yet
-        if (
-            timestamps_to_search[idx] != time
-            and not timestamps_to_search[0] < time < timestamps_to_search[-1]
-        ):
+        if fallback == "exact":
+            idx = np.searchsorted(timestamps_to_search, time)
+            if idx == len(timestamps_to_search) or timestamps_to_search[idx] != time:
+                return None
+            return self.per_timestep_driver_responses[idx]
+        if fallback != "previous":
+            raise ValueError(f"Unsupported driver-response fallback: {fallback}")
+
+        # Off-cadence video frames can sit between policy-response timestamps.
+        # Use the most recent response at-or-before the requested frame, keeping
+        # its original local-frame trajectory rather than reanchoring it.
+        idx = np.searchsorted(timestamps_to_search, time, side="right") - 1
+        if idx < 0:
             return None
-        assert (
-            timestamps_to_search[idx] == time
-        ), f"{time=} not {timestamps_to_search=}, interpolation is not supported."
         return self.per_timestep_driver_responses[idx]
+
+
+@dataclasses.dataclass
+class TrafficPredictionAtTime:
+    """Traffic model predictions produced for one query timestamp."""
+
+    query_time_us: int
+    object_trajectories: dict[str, geometry.Trajectory]
+
+
+@dataclasses.dataclass
+class TrafficPredictions:
+    """Traffic forecast trajectories keyed by their query timestamps."""
+
+    timestamps_us: list[int] = dataclasses.field(default_factory=list)
+    per_timestep_predictions: list[TrafficPredictionAtTime] = dataclasses.field(
+        default_factory=list
+    )
+    artists: dict[str, list[plt.Artist]] | None = None
+
+    def add_prediction(
+        self,
+        query_time_us: int,
+        object_trajectories: dict[str, geometry.Trajectory],
+    ) -> None:
+        if not object_trajectories:
+            return
+        self.timestamps_us.append(int(query_time_us))
+        self.per_timestep_predictions.append(
+            TrafficPredictionAtTime(
+                query_time_us=int(query_time_us),
+                object_trajectories=object_trajectories,
+            )
+        )
+
+    def get_prediction_for_time(
+        self,
+        time: int,
+        *,
+        fallback: Literal["exact", "previous"] = "previous",
+    ) -> TrafficPredictionAtTime | None:
+        if not self.timestamps_us:
+            return None
+        if fallback == "exact":
+            idx = np.searchsorted(self.timestamps_us, time)
+            if idx == len(self.timestamps_us) or self.timestamps_us[idx] != time:
+                return None
+            return self.per_timestep_predictions[idx]
+        if fallback != "previous":
+            raise ValueError(f"Unsupported traffic-prediction fallback: {fallback}")
+        idx = np.searchsorted(self.timestamps_us, time, side="right") - 1
+        if idx < 0:
+            return None
+        return self.per_timestep_predictions[idx]
+
+    @staticmethod
+    def _future_xy_points(
+        trajectory: geometry.Trajectory,
+        time: int,
+    ) -> np.ndarray:
+        if trajectory.is_empty() or trajectory.time_range_us.stop <= time:
+            return np.zeros((0, 2), dtype=np.float32)
+
+        future_positions: list[np.ndarray] = []
+        if time in trajectory.time_range_us:
+            future_positions.append(trajectory.interpolate_pose(int(time)).vec3[:2])
+        for idx, ts_us in enumerate(trajectory.timestamps_us):
+            if int(ts_us) > time:
+                future_positions.append(trajectory.positions[idx, :2])
+        if len(future_positions) < 2:
+            return np.zeros((0, 2), dtype=np.float32)
+        return np.asarray(future_positions, dtype=np.float32)
+
+    def remove_artists(self) -> None:
+        if self.artists is None:
+            return
+        for artist_list in self.artists.values():
+            for artist in artist_list:
+                artist.remove()
+        self.artists = None
+
+    def render_at_time(
+        self,
+        ax: plt.Axes,
+        time: int,
+    ) -> dict[str, list[plt.Artist]]:
+        self.remove_artists()
+        prediction = self.get_prediction_for_time(time, fallback="previous")
+        if prediction is None:
+            self.artists = {}
+            return self.artists
+
+        artists: dict[str, list[plt.Artist]] = {}
+        for object_id, trajectory in prediction.object_trajectories.items():
+            future_xy = self._future_xy_points(trajectory, time)
+            if future_xy.shape[0] < 2:
+                continue
+            artists[object_id] = ax.plot(
+                future_xy[:, 0],
+                future_xy[:, 1],
+                "-",
+                color="magenta",
+                linewidth=1.2,
+                alpha=0.75,
+                zorder=9,
+            )
+        self.artists = artists
+        return artists
 
 
 @dataclasses.dataclass
@@ -925,6 +1068,7 @@ class ActorPolygonsAtTime:
         center: shapely.Point | None = None,
         max_dist: float | None = None,
         only_agents: list[str] | None = None,
+        show_labels: bool = False,
     ) -> dict[str, list[plt.Artist]]:
         """Render the actor polygons.
 
@@ -973,6 +1117,29 @@ class ActorPolygonsAtTime:
                     polygon.exterior.xy[0], polygon.exterior.xy[1]
                 )
                 old_agent_artists[agent_id][1].set_xy(polygon.exterior.coords)
+                if show_labels and agent_id != "EGO":
+                    label_xy = polygon.centroid.coords[0]
+                    if len(old_agent_artists[agent_id]) >= 3:
+                        label_artist = old_agent_artists[agent_id][2]
+                        label_artist.set_position(label_xy)
+                        label_artist.set_text(agent_id)
+                        label_artist.set_visible(True)
+                    else:
+                        old_agent_artists[agent_id].append(
+                            ax.text(
+                                label_xy[0],
+                                label_xy[1],
+                                agent_id,
+                                fontsize=6,
+                                color="black",
+                                ha="center",
+                                va="center",
+                                zorder=20,
+                            )
+                        )
+                elif len(old_agent_artists[agent_id]) >= 3:
+                    old_agent_artists[agent_id][2].remove()
+                    old_agent_artists[agent_id] = old_agent_artists[agent_id][:2]
                 new_agent_artists[agent_id] = old_agent_artists[agent_id]
             else:
                 new_artists = []
@@ -992,6 +1159,20 @@ class ActorPolygonsAtTime:
                         alpha=0.1 if agent_id != "EGO" else 0.3,
                     )
                 )
+                if show_labels and agent_id != "EGO":
+                    label_xy = polygon.centroid.coords[0]
+                    new_artists.append(
+                        ax.text(
+                            label_xy[0],
+                            label_xy[1],
+                            agent_id,
+                            fontsize=6,
+                            color="black",
+                            ha="center",
+                            va="center",
+                            zorder=20,
+                        )
+                    )
                 new_agent_artists[agent_id] = new_artists
 
         # Remove unused artists
@@ -1059,6 +1240,7 @@ class ActorPolygons:
         center: shapely.Point | None = None,
         max_dist: float | None = None,
         only_agents: list[str] | None = None,
+        show_labels: bool = False,
     ) -> dict[str, list[plt.Artist]]:
         """Render the actor polygons at a given time.
 
@@ -1080,7 +1262,7 @@ class ActorPolygons:
         """
         polygons_at_time = self.get_polygons_at_time(time)
         self.artists = polygons_at_time.render(
-            ax, self.artists, center, max_dist, only_agents
+            ax, self.artists, center, max_dist, only_agents, show_labels=show_labels
         )
         return self.artists
 
@@ -1737,6 +1919,9 @@ class ScenarioEvalInput:
     # Driver responses (optional, needed for some metrics)
     driver_responses: DriverResponses | None = None
 
+    # Traffic model forecast trajectories (optional, used for video rendering)
+    traffic_predictions: TrafficPredictions | None = None
+
     # Vector map (needed for offroad detection)
     vec_map: VectorMap | None = None
 
@@ -1784,6 +1969,10 @@ class SimulationResult:
     actor_polygons: ActorPolygons
     cameras: Cameras
     routes: Routes
+    # Traffic model forecast trajectories for non-static actors
+    traffic_predictions: TrafficPredictions = dataclasses.field(
+        default_factory=TrafficPredictions
+    )
     # See ScenarioEvalInput.force_gt_duration_us.
     force_gt_duration_us: int | None = None
 
@@ -1791,18 +1980,15 @@ class SimulationResult:
     def first_driven_timestamp_us(self) -> int | None:
         """Earliest timestamp at which the ego is under policy control.
 
-        Computed as ``start_timestamp_us + force_gt_duration_us +
-        control_timestep_us`` — i.e. one control step past the last force-gt
-        step.  Returns ``None`` when ``force_gt_duration_us`` was not
-        propagated (e.g. ground-truth baseline runs), in which case the
-        aggregation pipeline will not filter any timesteps.
+        This is the policy handover ``render_start_timestamp_us +
+        force_gt_duration_us`` (``= closed_loop_start``).  Returns ``None`` when
+        ``force_gt_duration_us`` was not propagated (e.g. ground-truth baseline
+        runs), leaving the aggregation pipeline to filter no timesteps.
         """
         if self.force_gt_duration_us is None:
             return None
         return (
-            self.session_metadata.start_timestamp_us
-            + self.force_gt_duration_us
-            + self.session_metadata.control_timestep_us
+            self.session_metadata.render_start_timestamp_us + self.force_gt_duration_us
         )
 
     @property
@@ -1883,6 +2069,10 @@ class SimulationResult:
                 ),
             )
 
+        traffic_predictions = scenario_input.traffic_predictions
+        if traffic_predictions is None:
+            traffic_predictions = TrafficPredictions()
+
         # Create actor polygons from trajectories
         actor_polygons = ActorPolygons.from_actor_trajectories(actor_trajectories)
 
@@ -1900,6 +2090,7 @@ class SimulationResult:
             actor_trajectories=actor_trajectories,
             driver_estimated_trajectory=driver_estimated_trajectory,
             driver_responses=driver_responses,
+            traffic_predictions=traffic_predictions,
             ego_recorded_ground_truth_trajectory=ego_recorded_ground_truth_trajectory,
             vec_map=scenario_input.vec_map,
             actor_polygons=actor_polygons,

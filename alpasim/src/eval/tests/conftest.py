@@ -49,6 +49,9 @@ def create_test_eval_config(
             "image": {
                 "camera_logical_id": "camera_front_wide_120fov",
             },
+            "open_loop_collision": {
+                "horizon_s": 3.0,
+            },
         },
         "database": {
             "upload_metadata": False,
@@ -58,6 +61,7 @@ def create_test_eval_config(
         "aggregation_modifiers": {
             "max_dist_to_gt_trajectory": float("inf"),
         },
+        "scene_score": {},
         "vec_map": {},
     }
     return OmegaConf.merge(OmegaConf.structured(EvalConfig), config_dict)

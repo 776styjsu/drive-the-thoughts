@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 from asyncio import Lock
-from typing import Dict, Type
+from typing import Any, Dict, Type
 
 from alpasim_grpc.v0.common_pb2 import Empty
 from alpasim_grpc.v0.logging_pb2 import LogEntry
@@ -17,6 +17,10 @@ from alpasim_grpc.v0.sensorsim_pb2 import (
     AvailableCamerasRequest,
     AvailableCamerasReturn,
     AvailableEgoMasksReturn,
+    BatchRGBRenderRequest,
+    BatchRGBRenderRequestItem,
+    BatchRGBRenderReturn,
+    BatchRGBRenderReturnItem,
     DynamicObject,
     ImageFormat,
     PosePair,
@@ -25,15 +29,33 @@ from alpasim_grpc.v0.sensorsim_pb2 import (
 )
 from alpasim_grpc.v0.sensorsim_pb2_grpc import SensorsimServiceStub
 from alpasim_runtime.camera_catalog import CameraCatalog
-from alpasim_runtime.services.service_base import ServiceBase
+from alpasim_runtime.config import SimulationConfig
+from alpasim_runtime.services.service_base import ServiceBase, SessionInfo
+from alpasim_runtime.services.session_configs import RendererSessionConfig
 from alpasim_runtime.telemetry.rpc_wrapper import profiled_rpc_call
 from alpasim_runtime.types import Clock, RuntimeCamera
 from alpasim_utils.geometry import Pose, Trajectory, pose_to_grpc
 from alpasim_utils.types import ImageWithMetadata
 
+import grpc
+
 logger = logging.getLogger(__name__)
 
 WILDCARD_SCENE_ID = "*"
+MAX_GRPC_MESSAGE_BYTES = 64 * 1024 * 1024
+SENSORSIM_RETRY_DELAYS_S = (0.5, 2.0)
+# NRE loads scene and renderer state lazily. Artifact-fetch races and a first-render
+# backend wait exceeding NRE's server-side deadline both succeed once initialization
+# finishes, so they are safe to retry.
+SENSORSIM_TRANSIENT_ERROR_DETAILS = (
+    "A load persistent id instruction was encountered",
+    "Stopped waiting for backend",
+)
+# NRE blocks its entire gRPC server (no handshakes, no keepalive acks) for up
+# to ~60s while JIT-compiling render kernels on a fresh process's first render.
+# wait_for_ready=True queues RPCs until the channel connects instead of failing
+# UNAVAILABLE; the deadline bounds the wait for genuinely dead renderers.
+SENSORSIM_RPC_TIMEOUT_S = 300.0
 
 
 class SensorsimService(ServiceBase[SensorsimServiceStub]):
@@ -61,6 +83,72 @@ class SensorsimService(ServiceBase[SensorsimServiceStub]):
     @property
     def stub_class(self) -> Type[SensorsimServiceStub]:
         return SensorsimServiceStub
+
+    async def _open_connection(self) -> None:
+        """Open a gRPC connection that supports batched multi-camera images."""
+        if self.skip:
+            return
+        self.channel = grpc.aio.insecure_channel(
+            self.address,
+            options=[
+                ("grpc.max_receive_message_length", MAX_GRPC_MESSAGE_BYTES),
+                ("grpc.max_send_message_length", MAX_GRPC_MESSAGE_BYTES),
+            ],
+        )
+        self.stub = self.stub_class(self.channel)
+
+    async def _sensorsim_rpc(
+        self,
+        method_name: str,
+        stub_method: Any,
+        request: Any,
+    ) -> Any:
+        """Call a sensorsim RPC with the service's shared retry and timeout policy."""
+        return await profiled_rpc_call(
+            method_name,
+            "sensorsim",
+            stub_method,
+            request,
+            retry_delays_s=SENSORSIM_RETRY_DELAYS_S,
+            transient_error_details=SENSORSIM_TRANSIENT_ERROR_DETAILS,
+            timeout=SENSORSIM_RPC_TIMEOUT_S,
+            wait_for_ready=True,
+        )
+
+    def make_initial_render_event(self, **kwargs: Any) -> Any:
+        """Create the initial sensorsim render event for a rollout."""
+        from alpasim_runtime.events.camera import make_initial_sensorsim_render_event
+
+        return make_initial_sensorsim_render_event(
+            renderer_service=self,
+            **kwargs,
+        )
+
+    def validate_timing_alignment(self, simulation_config: SimulationConfig) -> None:
+        """Validate rollout timing against sensorsim's control-step cadence."""
+        force_gt_duration_us = simulation_config.force_gt_duration_us
+        control_timestep_us = simulation_config.control_timestep_us
+
+        if force_gt_duration_us < 0:
+            raise ValueError(
+                f"force_gt_duration_us must be >= 0, got {force_gt_duration_us}."
+            )
+        if force_gt_duration_us == 0:
+            return
+        if force_gt_duration_us % control_timestep_us != 0:
+            raise ValueError(
+                f"force_gt_duration_us ({force_gt_duration_us}) "
+                f"must be a multiple of control_timestep_us "
+                f"({control_timestep_us}). "
+                f"Non-divisible durations cause ambiguous policy start timing."
+            )
+
+    def required_policy_start_timestmap_us(
+        self,
+        render_start_timestamp_us: int,
+    ) -> int:
+        """Sensorsim can start policy at the first rendered frame."""
+        return render_start_timestamp_us
 
     @staticmethod
     def _copy_available_cameras(
@@ -95,9 +183,8 @@ class SensorsimService(ServiceBase[SensorsimServiceStub]):
                 )
 
                 logger.info(f"Requesting available cameras for {scene_id=}")
-                response: AvailableCamerasReturn = await profiled_rpc_call(
+                response: AvailableCamerasReturn = await self._sensorsim_rpc(
                     "get_available_cameras",
-                    "sensorsim",
                     self.stub.get_available_cameras,
                     request,
                 )
@@ -135,9 +222,8 @@ class SensorsimService(ServiceBase[SensorsimServiceStub]):
                 LogEntry(available_ego_masks_request=request)
             )
 
-            self._available_ego_masks = await profiled_rpc_call(
+            self._available_ego_masks = await self._sensorsim_rpc(
                 "get_available_ego_masks",
-                "sensorsim",
                 self.stub.get_available_ego_masks,
                 request,
             )
@@ -204,7 +290,7 @@ class SensorsimService(ServiceBase[SensorsimServiceStub]):
             ego_mask_id: Optional ego mask identifier to include in the render.
         """
         start_us = trigger.time_range_us.start
-        end_us = trigger.time_range_us.stop - 1
+        end_us = trigger.time_range_us.stop
 
         def trajectory_to_pose_pair(
             trajectory: Trajectory, delta: Pose | None
@@ -260,6 +346,133 @@ class SensorsimService(ServiceBase[SensorsimServiceStub]):
             ego_mask_id=ego_mask_id,
         )
 
+    @staticmethod
+    def _batch_return_to_images(
+        items: list[BatchRGBRenderReturnItem],
+        triggers_by_camera: dict[str, Clock.Trigger],
+    ) -> list[ImageWithMetadata]:
+        """Map a BatchRGBRenderReturn's items back to ImageWithMetadata.
+
+        Validates NRE's response against the request: raises if any item failed,
+        if an item names a camera we did not request, or if a requested camera is
+        missing from the response. Timestamps come from the request-side triggers
+        (NRE's RGBRenderReturn carries only image_bytes).
+        """
+        failures = [
+            (item.camera_name, item.error_message) for item in items if not item.success
+        ]
+        if failures:
+            detail = ", ".join(f"{name} ({msg})" for name, msg in failures)
+            raise RuntimeError(f"batch_render_rgb failed for camera(s): {detail}")
+
+        images: list[ImageWithMetadata] = []
+        seen: set[str] = set()
+        for item in items:
+            trigger = triggers_by_camera.get(item.camera_name)
+            if trigger is None:
+                raise RuntimeError(
+                    f"batch_render_rgb returned unknown camera "
+                    f"'{item.camera_name}'; expected one of "
+                    f"{sorted(triggers_by_camera)}"
+                )
+            if item.camera_name in seen:
+                raise RuntimeError(
+                    f"batch_render_rgb returned duplicate camera '{item.camera_name}'"
+                )
+            seen.add(item.camera_name)
+            images.append(
+                ImageWithMetadata(
+                    start_timestamp_us=trigger.time_range_us.start,
+                    end_timestamp_us=trigger.time_range_us.stop,
+                    image_bytes=item.result.image_bytes,
+                    camera_logical_id=item.camera_name,
+                )
+            )
+
+        missing = set(triggers_by_camera) - seen
+        if missing:
+            raise RuntimeError(
+                f"batch_render_rgb omitted requested camera(s): {sorted(missing)}"
+            )
+        return images
+
+    async def batch_render(
+        self,
+        camera_triggers: list[tuple[RuntimeCamera, Clock.Trigger]],
+        ego_trajectory: Trajectory,
+        traffic_trajectories: Dict[str, Trajectory],
+        scene_id: str,
+        image_format: ImageFormat,
+        ego_mask_rig_config_id: str | None = None,
+    ) -> (list[ImageWithMetadata], bytes | None):
+        """
+        Render multiple RGB images from the given scene and trajectories in a
+        single ``batch_render_rgb`` RPC (NRE's batched contract).
+
+        Returns a tuple of (list[ImageWithMetadata], driver_data). NRE's
+        ``BatchRGBRenderReturn`` carries no renderer->driver payload, so the
+        second element is always ``None`` here; it is kept for signature
+        compatibility with renderers that do provide one.
+        """
+        if self.skip:
+            logger.info("Skip mode: sensorsim returning empty images")
+            return (
+                [
+                    ImageWithMetadata(
+                        start_timestamp_us=trigger.time_range_us.start,
+                        end_timestamp_us=trigger.time_range_us.stop,
+                        image_bytes=b"",
+                        camera_logical_id=camera.logical_id,
+                    )
+                    for camera, trigger in camera_triggers
+                ],
+                None,
+            )
+
+        session_info = self._require_session_info()
+        available_ego_masks = await self.get_available_ego_masks()
+
+        # camera_name -> trigger, to rebuild image metadata from the response
+        # (NRE's RGBRenderReturn carries only image_bytes, no timestamps).
+        triggers_by_camera: dict[str, Clock.Trigger] = {}
+        request = BatchRGBRenderRequest()
+
+        for camera, trigger in camera_triggers:
+            ego_mask_id = self.determine_ego_mask_id(
+                available_ego_masks, camera.logical_id, ego_mask_rig_config_id
+            )
+
+            rgb_request = self.construct_rgb_render_request(
+                ego_trajectory,
+                traffic_trajectories,
+                camera,
+                trigger,
+                scene_id,
+                image_format,
+                ego_mask_id,
+            )
+            request.items.append(
+                BatchRGBRenderRequestItem(
+                    camera_name=camera.logical_id, request=rgb_request
+                )
+            )
+            triggers_by_camera[camera.logical_id] = trigger
+
+        await session_info.broadcaster.broadcast(LogEntry(batch_render_request=request))
+
+        response: BatchRGBRenderReturn = await self._sensorsim_rpc(
+            "batch_render_rgb",
+            self.stub.batch_render_rgb,
+            request,
+        )
+
+        images_with_metadata = self._batch_return_to_images(
+            response.items, triggers_by_camera
+        )
+        # NRE's BatchRGBRenderReturn carries no renderer->driver payload; second
+        # element is None (kept for signature parity with renderers that do).
+        return (images_with_metadata, None)
+
     async def aggregated_render(
         self,
         camera_triggers: list[tuple[RuntimeCamera, Clock.Trigger]],
@@ -300,8 +513,10 @@ class SensorsimService(ServiceBase[SensorsimServiceStub]):
             LogEntry(aggregated_render_request=request)
         )
 
-        response: AggregatedRenderReturn = await profiled_rpc_call(
-            "render_aggregated", "sensorsim", self.stub.render_aggregated, request
+        response: AggregatedRenderReturn = await self._sensorsim_rpc(
+            "render_aggregated",
+            self.stub.render_aggregated,
+            request,
         )
 
         images_with_metadata = []
@@ -360,8 +575,10 @@ class SensorsimService(ServiceBase[SensorsimServiceStub]):
 
         await session_info.broadcaster.broadcast(LogEntry(render_request=request))
 
-        response: RGBRenderReturn = await profiled_rpc_call(
-            "render_rgb", "sensorsim", self.stub.render_rgb, request
+        response: RGBRenderReturn = await self._sensorsim_rpc(
+            "render_rgb",
+            self.stub.render_rgb,
+            request,
         )
 
         return ImageWithMetadata(
@@ -369,4 +586,29 @@ class SensorsimService(ServiceBase[SensorsimServiceStub]):
             end_timestamp_us=trigger.time_range_us.stop,
             image_bytes=response.image_bytes,
             camera_logical_id=camera.logical_id,
+        )
+
+    # -- Renderer session lifecycle hooks --------------------------------------
+
+    async def _initialize_session(self, session_info: SessionInfo) -> None:
+        """Initialize a sensorsim rollout session.
+
+        Owns the sensorsim-specific camera discovery and camera catalog merge.
+        Runs once per rollout, after the gRPC connection is open and before the
+        event loop starts.
+
+        Skip-mode handling matches pre-refactor behavior: callers (tests) that
+        monkeypatch ``get_available_cameras`` can still populate camera
+        definitions; callers that do not get the same empty-result failure
+        mode as before at the first ``get_camera_definition`` lookup.
+        """
+        cfg = session_info.session_config
+        if not isinstance(cfg, RendererSessionConfig):
+            # Called without a RendererSessionConfig (direct-RPC tests, etc.).
+            return
+
+        scene_id = cfg.data_source.scene_id
+        sensorsim_cameras = await self.get_available_cameras(scene_id)
+        await self._camera_catalog.merge_local_and_sensorsim_cameras(
+            scene_id, sensorsim_cameras
         )

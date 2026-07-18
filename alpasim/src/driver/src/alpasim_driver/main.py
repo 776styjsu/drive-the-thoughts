@@ -51,6 +51,7 @@ from alpasim_grpc.v0.egodriver_pb2_grpc import (
     add_EgodriverServiceServicer_to_server,
 )
 from alpasim_plugins.plugins import models as model_registry
+from alpasim_utils.geometry import quat_to_yaw, yaw_to_quat_components
 from omegaconf import OmegaConf
 from PIL import Image
 
@@ -62,6 +63,7 @@ from .models import DriveCommand
 from .models.base import (
     BaseTrajectoryModel,
     CameraImages,
+    ModelInputValidationError,
     ModelPrediction,
     PredictionInput,
 )
@@ -99,22 +101,6 @@ def _get_external_ip() -> str:
         return "unknown"
 
 
-def _quat_to_yaw(quaternion: Quat) -> float:
-    """Extract the yaw component (rotation about +Z) from a quaternion."""
-
-    return np.arctan2(
-        2.0 * (quaternion.w * quaternion.z + quaternion.x * quaternion.y),
-        1.0 - 2.0 * (quaternion.y * quaternion.y + quaternion.z * quaternion.z),
-    )
-
-
-def _yaw_to_quat(yaw: float) -> Quat:
-    """Create a Z-only rotation quaternion from the provided yaw angle."""
-
-    half_yaw = 0.5 * yaw
-    return Quat(w=float(np.cos(half_yaw)), x=0.0, y=0.0, z=float(np.sin(half_yaw)))
-
-
 def _rig_est_offsets_to_local_positions(
     current_pose_in_local: PoseAtTime, offsets_in_rig: np.ndarray
 ) -> np.ndarray:
@@ -124,7 +110,7 @@ def _rig_est_offsets_to_local_positions(
     curr_y = current_pose_in_local.pose.vec.y
 
     curr_quat = current_pose_in_local.pose.quat
-    curr_yaw = _quat_to_yaw(curr_quat)
+    curr_yaw = quat_to_yaw(curr_quat)
 
     cos_yaw = np.cos(curr_yaw)
     sin_yaw = np.sin(curr_yaw)
@@ -170,6 +156,7 @@ class Session:
     poses: list[PoseAtTime] = field(default_factory=list)
     dynamic_states: list[tuple[int, DynamicState]] = field(default_factory=list)
     current_command: DriveCommand = DriveCommand.STRAIGHT  # Default to straight
+    inference_count: int = 0
 
     @staticmethod
     def create(
@@ -453,7 +440,6 @@ class EgoDriverService(EgodriverServiceServicer):
         self,
         cfg: DriverConfig,
         loop: asyncio.AbstractEventLoop,
-        grpc_server: grpc.aio.Server,
     ) -> None:
         """Initialize the Ego Driver service.
 
@@ -464,13 +450,11 @@ class EgoDriverService(EgodriverServiceServicer):
             cfg: Hydra configuration containing model paths and inference settings
             loop: Asyncio event loop for coordinating async operations and scheduling
                 futures from the worker thread back to the async gRPC handlers
-            grpc_server: gRPC server instance for service registration
         """
 
         # Private members
         self._cfg = cfg
         self._loop = loop
-        self._grpc_server = grpc_server
 
         # Determine device
         self._device = torch.device(
@@ -718,6 +702,8 @@ class EgoDriverService(EgodriverServiceServicer):
         inputs = []
         for job in batch:
             speed, acceleration = self._get_speed_and_acceleration(job.session)
+            inference_seed = job.session.seed + job.session.inference_count
+            job.session.inference_count += 1
             inputs.append(
                 PredictionInput(
                     camera_images=self._prepare_camera_images(job.session),
@@ -725,6 +711,7 @@ class EgoDriverService(EgodriverServiceServicer):
                     speed=speed,
                     acceleration=acceleration,
                     ego_pose_history=job.session.poses,
+                    inference_seed=inference_seed,
                 )
             )
         return self._model.predict_batch(inputs)
@@ -903,7 +890,13 @@ class EgoDriverService(EgodriverServiceServicer):
         )
         self._job_queue.put_nowait(job)
 
-        prediction = await future
+        try:
+            prediction = await future
+        except ModelInputValidationError as exc:
+            logger.error("Driver input validation failed: %s", exc)
+            if context is not None:
+                await context.abort(grpc.StatusCode.FAILED_PRECONDITION, str(exc))
+            raise
 
         # Convert model prediction to Alpasim trajectory format
         alpasim_traj: Trajectory = self._convert_prediction_to_alpasim_trajectory(
@@ -1004,46 +997,26 @@ class EgoDriverService(EgodriverServiceServicer):
         timestamps_us = (time_now_us + steps * time_delta_us).tolist()
 
         # Transform model headings from rig frame to local frame
-        current_yaw = _quat_to_yaw(current_pose.pose.quat)
+        current_yaw = quat_to_yaw(current_pose.pose.quat)
         local_yaws = prediction.headings + current_yaw
 
         for local_xy, yaw, timestamp_us in zip(
             local_positions, local_yaws, timestamps_us, strict=True
         ):
             local_x, local_y = map(float, local_xy)
+            quat_w, quat_x, quat_y, quat_z = yaw_to_quat_components(float(yaw))
 
             trajectory.poses.append(
                 PoseAtTime(
                     pose=Pose(
                         vec=Vec3(x=local_x, y=local_y, z=curr_z),
-                        quat=_yaw_to_quat(float(yaw)),
+                        quat=Quat(w=quat_w, x=quat_x, y=quat_y, z=quat_z),
                     ),
                     timestamp_us=timestamp_us,
                 )
             )
 
         return trajectory
-
-    @async_log_call
-    async def shut_down(
-        self, request: Empty, context: grpc.aio.ServicerContext
-    ) -> Empty:
-        logger.info("shut_down requested, scheduling deferred shutdown")
-        # Schedule shutdown to happen after RPC completes to avoid CancelledError
-        asyncio.create_task(self._deferred_shutdown())
-        return Empty()
-
-    async def _deferred_shutdown(self) -> None:
-        """Shutdown the server and worker after the shut_down RPC completes.
-
-        This deferred approach prevents the shut_down RPC from cancelling itself
-        when stopping the server, which would result in asyncio.exceptions.CancelledError.
-        """
-        # Small delay to ensure the shut_down RPC response is sent first
-        await asyncio.sleep(0.1)
-        logger.info("Executing deferred shutdown")
-        await self._grpc_server.stop(grace=None)
-        await self.stop_worker()
 
 
 async def serve(cfg: DriverConfig) -> None:
@@ -1054,7 +1027,6 @@ async def serve(cfg: DriverConfig) -> None:
     service = EgoDriverService(
         cfg=cfg,
         loop=loop,
-        grpc_server=server,
     )
     add_EgodriverServiceServicer_to_server(service, server)
 
@@ -1094,7 +1066,6 @@ def _run_grpc_in_thread(cfg: DriverConfig, ready_event: threading.Event) -> None
         service = EgoDriverService(
             cfg=cfg,
             loop=loop,
-            grpc_server=server,
         )
         add_EgodriverServiceServicer_to_server(service, server)
 

@@ -17,7 +17,7 @@
 #
 # The judge is an OpenAI-compatible endpoint:
 #   - gpt  -> OpenAI GPT-5.5     (needs OPENAI_API_KEY)
-#   - kimi -> Moonshot Kimi K2.5 (needs MOONSHOT_API_KEY)
+#   - kimi -> UVA RC Kimi K2.5   (needs UVA_RC_GENAI_KEY)
 #   - qwen / qwen35 -> a local vLLM server (start it separately with
 #     `tools/serve_qwen3_4b_fp8_vllm.sh serve`, or point QWEN3_BASE_URL at one;
 #     set START_VLLM=1 to launch one on this job — shares the GPU, keep
@@ -35,14 +35,14 @@
 #SBATCH --partition=gpu
 #SBATCH --mem=24G
 #SBATCH -J "alpamayo_monitor_run"
-#SBATCH --account=your_hpc_account
+#SBATCH --account=elbaumhpc
 #SBATCH --output=logs/alpamayo_monitor_run_%A_%a.out
 #SBATCH --error=logs/alpamayo_monitor_run_%A_%a.err
 
 set -euo pipefail
 
 # ---------- Config (override via sbatch --export=ALL,NAME=value,...) ----------
-REPO_ROOT="${REPO_ROOT:-<alpasim-source-root>}"
+REPO_ROOT="${REPO_ROOT:-/project/AV/alpasim}"
 CSV_PATH="${CSV_PATH:-data/scenes/sim_scenes_monitor_resample_actionable.csv}"
 TOP_N="${TOP_N:-100}"
 START_INDEX="${START_INDEX:-0}"
@@ -60,7 +60,7 @@ SETUP_ENV="${SETUP_ENV:-1}"
 
 # ---------- Consistency monitor config ----------
 # Friendly judge switch. JUDGE selects the backend; an explicit MONITOR_PROVIDER
-# wins over JUDGE. gpt = OpenAI GPT-5.5, kimi = Moonshot Kimi K2.5, qwen/qwen35 =
+# wins over JUDGE. gpt = OpenAI GPT-5.5, kimi = UVA Kimi K2.5, qwen/qwen35 =
 # local vLLM.
 JUDGE="${JUDGE:-qwen}"
 if [[ -z "${MONITOR_PROVIDER:-}" ]]; then
@@ -68,7 +68,7 @@ if [[ -z "${MONITOR_PROVIDER:-}" ]]; then
     qwen)   MONITOR_PROVIDER="qwen3_4b_fp8" ;;
     qwen35) MONITOR_PROVIDER="qwen35_4b_fp8" ;;
     gpt)    MONITOR_PROVIDER="openai" ;;
-    kimi)   MONITOR_PROVIDER="kimi" ;;
+    kimi)   MONITOR_PROVIDER="uva" ;;
     *)
       echo "Unknown JUDGE='$JUDGE' (expected: qwen | qwen35 | gpt | kimi)" >&2
       exit 1
@@ -77,7 +77,7 @@ if [[ -z "${MONITOR_PROVIDER:-}" ]]; then
 fi
 MONITOR_MODEL="${MONITOR_MODEL:-}"        # empty -> provider default
 MONITOR_BASE_URL="${MONITOR_BASE_URL:-}"  # empty -> provider default (localhost:8000/v1)
-MONITOR_VARIANT="${MONITOR_VARIANT:-${MONITOR_PROMPT:-center_of_lane}}"
+MONITOR_PROMPT="${MONITOR_PROMPT:-center_of_lane_v5}"
 MONITOR_MAX_SAMPLES="${MONITOR_MAX_SAMPLES:-3}"
 MONITOR_ACCEPT_THRESHOLD="${MONITOR_ACCEPT_THRESHOLD:-3}"
 MONITOR_EVERY_N_STEPS="${MONITOR_EVERY_N_STEPS:-1}"
@@ -175,7 +175,7 @@ load_env_var() {
 # backend is authenticated regardless of which JUDGE is selected.
 JUDGE_ENV_VARS=(
   OPENAI_API_KEY OPENAI_BASE_URL
-  MOONSHOT_API_KEY MOONSHOT_BASE_URL
+  UVA_RC_GENAI_KEY UVA_RC_GENAI_BASE_URL
   QWEN3_API_KEY QWEN3_BASE_URL
   QWEN35_API_KEY QWEN35_BASE_URL
 )
@@ -188,7 +188,7 @@ done
 # The selected provider's key var, used only for the missing-key warning below.
 case "$MONITOR_PROVIDER" in
   openai)        JUDGE_KEY_VAR=OPENAI_API_KEY ;;
-  kimi)          JUDGE_KEY_VAR=MOONSHOT_API_KEY ;;
+  uva)           JUDGE_KEY_VAR=UVA_RC_GENAI_KEY ;;
   qwen3_4b_fp8)  JUDGE_KEY_VAR=QWEN3_API_KEY ;;
   qwen35_4b_fp8) JUDGE_KEY_VAR=QWEN35_API_KEY ;;
   *)             JUDGE_KEY_VAR="" ;;
@@ -196,7 +196,7 @@ esac
 
 # Remote judges (gpt/kimi) call an external API; never auto-start a local vLLM,
 # and warn early if their key is missing (the monitor would silently no-op).
-if [[ "$MONITOR_PROVIDER" == "openai" || "$MONITOR_PROVIDER" == "kimi" ]]; then
+if [[ "$MONITOR_PROVIDER" == "openai" || "$MONITOR_PROVIDER" == "uva" ]]; then
   START_VLLM=0
   if [[ -z "${!JUDGE_KEY_VAR:-}" ]]; then
     echo "WARNING: $JUDGE_KEY_VAR not found in environment or $REPO_ROOT/.env; the " \
@@ -269,7 +269,7 @@ MON="runtime.simulation_config.consistency_monitor"
 EXTRA_ARGS=(
   --extra "${MON}.enabled=true"
   --extra "${MON}.provider=${MONITOR_PROVIDER}"
-  --extra "${MON}.variant=${MONITOR_VARIANT}"
+  --extra "${MON}.prompt=${MONITOR_PROMPT}"
   --extra "${MON}.max_samples=${MONITOR_MAX_SAMPLES}"
   --extra "${MON}.accept_threshold=${MONITOR_ACCEPT_THRESHOLD}"
   --extra "${MON}.monitor_every_n_steps=${MONITOR_EVERY_N_STEPS}"
@@ -318,7 +318,7 @@ echo "  REPO_ROOT=$REPO_ROOT"
 echo "  CSV_PATH=$CSV_PATH  TOP_N=$TOP_N  START_INDEX=$START_INDEX"
 echo "  RUN_TOP_N=$RUN_TOP_N  RUN_START_INDEX=$RUN_START_INDEX  SIM_STEPS=$SIM_STEPS"
 echo "  DEPLOY=$DEPLOY  LOG_ROOT=$LOG_ROOT  DRIVER=$DRIVER"
-echo "  MONITOR: judge=$JUDGE provider=$MONITOR_PROVIDER variant=$MONITOR_VARIANT max_samples=$MONITOR_MAX_SAMPLES"
+echo "  MONITOR: judge=$JUDGE provider=$MONITOR_PROVIDER prompt=$MONITOR_PROMPT max_samples=$MONITOR_MAX_SAMPLES"
 echo "           accept_threshold=$MONITOR_ACCEPT_THRESHOLD every_n_steps=$MONITOR_EVERY_N_STEPS"
 echo "           model=${MONITOR_MODEL:-<provider default>} base_url=${MONITOR_BASE_URL:-<provider default>}"
 echo "           forward_env=${JUDGE_ENV_FORWARD[*]:-<none>} START_VLLM=$START_VLLM"

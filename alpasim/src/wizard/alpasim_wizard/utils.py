@@ -1,11 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2025-2026 NVIDIA Corporation
 
+import json
 import logging
 import os
 import re
 import subprocess
 import sys
+import uuid
 from enum import Enum
 from pathlib import Path
 from typing import Any, cast
@@ -40,7 +42,27 @@ def write_yaml(data: dict[str, Any], file_path: str) -> None:
     IndentedListDumper.add_representer(LiteralStr, represent_literal_str)
 
     with open(file_path, "w") as stream:
-        yaml.dump(data, stream, Dumper=IndentedListDumper)
+        yaml.dump(data, stream, Dumper=IndentedListDumper, sort_keys=False)
+
+
+def write_json(data: Any, file_path: str | Path, *, mode: int | None = None) -> None:
+    """Atomically write indented JSON, creating the parent directory first.
+
+    Writes to a temporary file and renames it into place so concurrent readers
+    (e.g. an external Prometheus watching file-SD target files) never observe
+    partially written JSON.
+    """
+    path = Path(file_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        with open(temporary_path, "w", encoding="utf-8") as stream:
+            if mode is not None:
+                os.fchmod(stream.fileno(), mode)
+            json.dump(data, stream, indent=2)
+        os.replace(temporary_path, path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
 
 
 def nre_image_to_nre_version(image: str) -> str:

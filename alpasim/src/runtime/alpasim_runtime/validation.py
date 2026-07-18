@@ -6,7 +6,11 @@
 import asyncio
 import logging
 import os
+import time
 from collections import defaultdict
+from collections.abc import Coroutine
+from contextlib import suppress
+from typing import Any, TypeVar
 
 import alpasim_runtime
 from alpasim_grpc import API_VERSION_MESSAGE
@@ -15,6 +19,7 @@ from alpasim_grpc.v0.logging_pb2 import RolloutMetadata
 from alpasim_runtime.config import (
     NetworkSimulatorConfig,
     PhysicsUpdateMode,
+    RendererKind,
     SceneConfig,
     SimulatorConfig,
     UserEndpointConfig,
@@ -25,14 +30,9 @@ import grpc
 
 logger = logging.getLogger(__name__)
 
-# Service name -> RolloutMetadata.VersionIds field name mapping.
-_SERVICE_TO_VERSION_FIELD = {
-    "driver": "egodriver_version",
-    "sensorsim": "sensorsim_version",
-    "physics": "physics_version",
-    "trafficsim": "traffic_version",
-    "controller": "controller_version",
-}
+T = TypeVar("T")
+
+_PENDING_PROBE_LOG_INTERVAL_S = 10.0
 
 # Sentinel VersionId for skipped services.
 _SKIP_VERSION = VersionId(
@@ -40,6 +40,43 @@ _SKIP_VERSION = VersionId(
     git_hash="<skip>",
     grpc_api_version=API_VERSION_MESSAGE,
 )
+
+
+async def _log_awaitable_progress(
+    coroutine: Coroutine[Any, Any, T],
+    *,
+    label: str,
+    log_interval_s: float = _PENDING_PROBE_LOG_INTERVAL_S,
+) -> T:
+    """
+    Wraps a coroutine in another coroutine which periodically logs if it remains pending.
+
+    Useful for detecting stuck/slow operations.
+    """
+    task = asyncio.create_task(coroutine)
+    start_time = time.monotonic()
+
+    try:
+        while True:
+            done, _ = await asyncio.wait(
+                {task},
+                timeout=log_interval_s,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if task in done:
+                return task.result()
+
+            logger.info(
+                "%s still waiting after %.0fs",
+                label,
+                time.monotonic() - start_time,
+            )
+    except BaseException:
+        if not task.done():
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
+        raise
 
 
 async def _probe_version_for_address(
@@ -117,6 +154,7 @@ def _assert_consistent_versions(
 async def gather_versions_from_addresses(
     network_config: NetworkSimulatorConfig,
     user_endpoints: UserEndpointConfig,
+    renderer_kind: RendererKind,
     timeout_s: int = 30,
 ) -> RolloutMetadata.VersionIds:
     """Probe all service addresses and return canonical version IDs.
@@ -143,13 +181,16 @@ async def gather_versions_from_addresses(
     # Determine which services to skip based on user config.
     skip_flags = {
         "driver": user_endpoints.driver.skip,
-        "sensorsim": user_endpoints.sensorsim.skip,
+        "renderer": user_endpoints.renderer.skip,
         "physics": user_endpoints.physics.skip,
         "trafficsim": user_endpoints.trafficsim.skip,
         "controller": user_endpoints.controller.skip,
     }
 
-    endpoint_stubs = get_service_endpoints(network_config)
+    endpoint_stubs = get_service_endpoints(
+        network_config,
+        renderer_kind=renderer_kind,
+    )
 
     # Build probe tasks for non-skip services (probe ALL addresses per service).
     tasks = []
@@ -162,20 +203,45 @@ async def gather_versions_from_addresses(
             )
         for address in addresses:
             tasks.append(
-                _probe_version_for_address(svc_name, stub_class, address, timeout_s)
+                _log_awaitable_progress(
+                    _probe_version_for_address(
+                        svc_name,
+                        stub_class,
+                        address,
+                        timeout_s,
+                    ),
+                    label=f"Service version probe for {svc_name} at {address}",
+                )
             )
 
     results = await asyncio.gather(*tasks)
     canonical = _assert_consistent_versions(list(results))
 
-    # Build VersionIds: use canonical version for probed services, skip sentinel for others.
-    version_kwargs = {"runtime_version": runtime_version}
-    for svc_name, field_name in _SERVICE_TO_VERSION_FIELD.items():
-        if skip_flags[svc_name]:
-            version_kwargs[field_name] = _SKIP_VERSION
-        else:
-            version_kwargs[field_name] = canonical[svc_name]
+    renderer_version_field = (
+        "video_model_version"
+        if renderer_kind == RendererKind.video_model
+        else "sensorsim_version"
+    )
+    service_to_version_field = {
+        "driver": "egodriver_version",
+        "renderer": renderer_version_field,
+        "physics": "physics_version",
+        "trafficsim": "traffic_version",
+        "controller": "controller_version",
+    }
 
+    version_kwargs = {
+        "runtime_version": runtime_version,
+        "egodriver_version": _SKIP_VERSION,
+        "sensorsim_version": _SKIP_VERSION,
+        "video_model_version": _SKIP_VERSION,
+        "physics_version": _SKIP_VERSION,
+        "traffic_version": _SKIP_VERSION,
+        "controller_version": _SKIP_VERSION,
+    }
+    for svc_name, field_name in service_to_version_field.items():
+        if not skip_flags[svc_name]:
+            version_kwargs[field_name] = canonical[svc_name]
     return RolloutMetadata.VersionIds(**version_kwargs)
 
 
@@ -186,32 +252,52 @@ async def validate_scenarios(config: SimulatorConfig) -> None:
     Uses lightweight probes to check scene availability without creating full pools.
     This ensures we fail fast in the parent if any scenario is invalid.
     """
-    # Validate physics mode compatibility (shared config, check once)
+    simulation_config = config.user.simulation_config
+
+    if (
+        config.user.endpoints.physics.skip
+        and simulation_config.physics_update_mode != PhysicsUpdateMode.NONE
+    ):
+        raise AssertionError("Physics update mode requires the physics service to run.")
     if (
         not config.user.endpoints.physics.skip
-        and config.user.simulation_config.physics_update_mode == PhysicsUpdateMode.NONE
+        and simulation_config.physics_update_mode == PhysicsUpdateMode.NONE
     ):
         raise AssertionError(
             "Physics is disabled in simulation config but physics service is not skipped."
         )
 
     # driver and controller return wildcard (work with any scene), no need to probe
+    services_to_probe = ["physics", "trafficsim"]
+    if config.user.renderer.kind == RendererKind.sensorsim:
+        services_to_probe.append("renderer")
+    skip_flags = {
+        "renderer": config.user.endpoints.renderer.skip,
+        "physics": config.user.endpoints.physics.skip,
+        "trafficsim": config.user.endpoints.trafficsim.skip,
+    }
+    services_to_probe = [s for s in services_to_probe if not skip_flags[s]]
     service_endpoints = get_service_endpoints(
-        config.network, services=["sensorsim", "physics", "trafficsim"]
+        config.network,
+        services=services_to_probe,
+        renderer_kind=config.user.renderer.kind,
     )
 
     tasks = []
     for svc_name, (stub_class, addresses) in service_endpoints.items():
         if not addresses:
             continue
+        address = addresses[0]
         tasks.append(
-            _probe_scenario_compatibility(
-                svc_name,
-                stub_class,
-                addresses[0],
-                config.user.scenes,
-                timeout_s=config.user.endpoints.startup_timeout_s,
-                use_metadata=(svc_name == "trafficsim"),
+            _log_awaitable_progress(
+                _probe_scenario_compatibility(
+                    svc_name,
+                    stub_class,
+                    address,
+                    config.user.scenes,
+                    timeout_s=config.user.endpoints.startup_timeout_s,
+                ),
+                label=f"Scenario validation probe for {svc_name} at {address}",
             )
         )
 
@@ -228,35 +314,18 @@ async def _probe_scenario_compatibility(
     address: str,
     scenes: list[SceneConfig],
     timeout_s: int = 30,
-    use_metadata: bool = False,
 ) -> list[str]:
-    """Probe a service address to validate scenario compatibility without creating pools.
-
-    Args:
-        svc_name: Name of the service being probed (for logging).
-        use_metadata: If True, use get_metadata().supported_map_ids instead of
-            get_available_scenes().scene_ids (for trafficsim compatibility).
-    """
+    """Probe a service address to validate scenario compatibility without creating pools."""
     incompatibilities = []
 
     logger.info("Validating scenarios on %s at %s...", svc_name, address)
     channel = grpc.aio.insecure_channel(address)
     try:
         stub = stub_class(channel)
-        if use_metadata:
-            # trafficsim uses get_metadata with supported_map_ids
-            response = await stub.get_metadata(
-                Empty(), wait_for_ready=True, timeout=timeout_s
-            )
-            # trafficsim returns map_ids without the clipgt- prefix, so we add it
-            available_scenes = set(
-                f"clipgt-{map_id}" for map_id in response.supported_map_ids
-            )
-        else:
-            response = await stub.get_available_scenes(
-                Empty(), wait_for_ready=True, timeout=timeout_s
-            )
-            available_scenes = set(response.scene_ids)
+        response = await stub.get_available_scenes(
+            Empty(), wait_for_ready=True, timeout=timeout_s
+        )
+        available_scenes = set(response.scene_ids)
 
         for scene in scenes:
             if scene.scene_id not in available_scenes and "*" not in available_scenes:

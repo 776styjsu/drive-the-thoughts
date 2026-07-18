@@ -44,18 +44,15 @@ class ApptainerDeployment:
     # ------------------------------------------------------------------
 
     def deploy_all_services(self) -> None:
-        """Deploy all services (simulation, evaluation, aggregation)."""
+        """Deploy all services (evaluation runs inside the runtime)."""
         self.deploy_simulation()
-        self.deploy_evaluation()
-        self.deploy_aggregation()
 
     def generate_run_script(self) -> None:
         """Generate a ``run.sh`` script that runs all phases sequentially."""
+        runtime = self.container_set.runtime
         sim_cmds = self._build_phase_commands(
-            self.container_set.sim, self.container_set.runtime
+            self.container_set.sim, [runtime] if runtime else None
         )
-        eval_cmds = self._build_phase_commands(self.container_set.eval)
-        agg_cmds = self._build_phase_commands(self.container_set.agg)
 
         script_lines = [
             "#!/bin/bash",
@@ -64,10 +61,6 @@ class ApptainerDeployment:
             "# --- Simulation phase ---",
         ]
         script_lines.extend(sim_cmds)
-        script_lines += ["", "# --- Evaluation phase ---"]
-        script_lines.extend(eval_cmds)
-        script_lines += ["", "# --- Aggregation phase ---"]
-        script_lines.extend(agg_cmds)
         script_lines += ["", 'echo "All phases completed successfully!"']
 
         run_script_path = Path(self.context.cfg.wizard.log_dir) / "run.sh"
@@ -85,7 +78,9 @@ class ApptainerDeployment:
         """Deploy simulation services (including runtime)."""
         logger.info("Running simulation services via Apptainer")
         containers = list(self.container_set.sim or [])
-        containers_last = list(self.container_set.runtime or [])
+        containers_last = (
+            [self.container_set.runtime] if self.container_set.runtime else []
+        )
 
         for c in containers:
             if c.command == "noop":
@@ -103,30 +98,6 @@ class ApptainerDeployment:
             self._wait_for_containers(containers)
 
         for c in containers_last:
-            cmd = self._to_apptainer_exec(c)
-            dispatch_command(
-                cmd,
-                log_dir=Path(self.context.cfg.wizard.log_dir),
-                dry_run=self.context.cfg.wizard.dry_run,
-                blocking=True,
-            )
-
-    def deploy_evaluation(self) -> None:
-        """Deploy evaluation services."""
-        logger.info("Running evaluation services via Apptainer")
-        for c in self.container_set.eval or []:
-            cmd = self._to_apptainer_exec(c)
-            dispatch_command(
-                cmd,
-                log_dir=Path(self.context.cfg.wizard.log_dir),
-                dry_run=self.context.cfg.wizard.dry_run,
-                blocking=True,
-            )
-
-    def deploy_aggregation(self) -> None:
-        """Deploy aggregation services."""
-        logger.info("Running aggregation services via Apptainer")
-        for c in self.container_set.agg or []:
             cmd = self._to_apptainer_exec(c)
             dispatch_command(
                 cmd,

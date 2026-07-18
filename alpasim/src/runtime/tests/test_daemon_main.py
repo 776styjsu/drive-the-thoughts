@@ -5,17 +5,19 @@ from __future__ import annotations
 
 import asyncio
 from argparse import Namespace
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
 from alpasim_grpc.v0 import common_pb2, runtime_pb2
 from alpasim_runtime.daemon.app import RuntimeDaemonApp
-from alpasim_runtime.daemon.engine import UnknownSceneError
 from alpasim_runtime.daemon.servicer import RuntimeDaemonServicer
+from alpasim_runtime.errors import UnknownSceneError
 from alpasim_runtime.simulate.__main__ import _serve, create_arg_parser, run_simulation
 
 import grpc
+from eval.aggregation.failed_rollouts import FailedRollout
 
 
 class _AbortContext:
@@ -27,6 +29,16 @@ class _AbortContext:
         self.code = code
         self.details = details
         raise RuntimeError("aborted")
+
+
+def _make_serve_args() -> Namespace:
+    return Namespace(
+        user_config="u.yaml",
+        network_config="n.yaml",
+        eval_config="e.yaml",
+        log_dir="/tmp/log",
+        listen_address="[::]:50051",
+    )
 
 
 @pytest.mark.asyncio
@@ -139,16 +151,7 @@ async def test_daemon_main_serve_starts_and_drains(
         _FakeApp,
     )
 
-    args = Namespace(
-        user_config="u.yaml",
-        network_config="n.yaml",
-        eval_config="e.yaml",
-        usdz_glob="/tmp/*.usdz",
-        log_dir="/tmp/log",
-        listen_address="[::]:50051",
-    )
-
-    await asyncio.wait_for(_serve(args), timeout=0.5)
+    await asyncio.wait_for(_serve(_make_serve_args()), timeout=0.5)
 
     assert len(app_instances) == 1
     app = app_instances[0]
@@ -190,16 +193,7 @@ async def test_daemon_main_serve_stops_on_app_shutdown_request(
         _FakeApp,
     )
 
-    args = Namespace(
-        user_config="u.yaml",
-        network_config="n.yaml",
-        eval_config="e.yaml",
-        usdz_glob="/tmp/*.usdz",
-        log_dir="/tmp/log",
-        listen_address="[::]:50051",
-    )
-
-    await asyncio.wait_for(_serve(args), timeout=0.5)
+    await asyncio.wait_for(_serve(_make_serve_args()), timeout=0.5)
 
     assert len(app_instances) == 1
 
@@ -211,7 +205,6 @@ def test_simulate_parser_supports_serve_mode_args() -> None:
             "--user-config=u.yaml",
             "--network-config=n.yaml",
             "--eval-config=e.yaml",
-            "--usdz-glob=/tmp/*.usdz",
             "--log-dir=/tmp/log",
             "--serve",
             "--listen-address=[::]:50060",
@@ -230,7 +223,6 @@ def test_simulate_parser_rejects_removed_grpc_shutdown_flag() -> None:
                 "--user-config=u.yaml",
                 "--network-config=n.yaml",
                 "--eval-config=e.yaml",
-                "--usdz-glob=/tmp/*.usdz",
                 "--log-dir=/tmp/log",
                 "--serve",
                 "--grpc-graceful-shutdown-s=7.0",
@@ -413,13 +405,12 @@ async def test_runtime_daemon_app_shutdowns_engine_when_server_stop_fails(
     engine.shutdown.assert_awaited_once()
 
 
-def _make_one_shot_args() -> Namespace:
+def _make_one_shot_args(log_dir: str = "/tmp/log") -> Namespace:
     return Namespace(
         user_config="u.yaml",
         network_config="n.yaml",
         eval_config="e.yaml",
-        usdz_glob="/tmp/*.usdz",
-        log_dir="/tmp/log",
+        log_dir=log_dir,
         array_job_dir=None,
     )
 
@@ -469,7 +460,10 @@ async def test_run_simulation_one_shot_uses_daemon_engine(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fake_config = SimpleNamespace(
-        user=SimpleNamespace(nr_workers=1),
+        user=SimpleNamespace(
+            nr_workers=1,
+            prometheus=SimpleNamespace(url="http://prometheus-0:9090"),
+        ),
     )
     fake_eval_config = SimpleNamespace(run_in_runtime=False, enabled=False)
     _patch_one_shot_inputs(
@@ -503,16 +497,6 @@ async def test_run_simulation_one_shot_uses_daemon_engine(
         engine_cls,
     )
 
-    shutdown_services = AsyncMock()
-    monkeypatch.setattr(
-        "alpasim_runtime.simulate.__main__.shutdown_services",
-        shutdown_services,
-    )
-    merge_metrics_files = Mock()
-    monkeypatch.setattr(
-        "alpasim_runtime.simulate.__main__.merge_metrics_files",
-        merge_metrics_files,
-    )
     generate_metrics_plot = Mock(return_value="/tmp/log/metrics_plot.png")
     monkeypatch.setattr(
         "alpasim_runtime.simulate.__main__.generate_metrics_plot",
@@ -532,14 +516,14 @@ async def test_run_simulation_one_shot_uses_daemon_engine(
         user_config="u.yaml",
         network_config="n.yaml",
         eval_config="e.yaml",
-        usdz_glob="/tmp/*.usdz",
         log_dir="/tmp/log",
     )
     fake_engine.startup.assert_awaited_once()
     fake_engine.shutdown.assert_awaited_once()
-    shutdown_services.assert_awaited_once_with(fake_config)
-    merge_metrics_files.assert_called_once_with("/tmp/log/telemetry")
-    generate_metrics_plot.assert_called_once()
+    generate_metrics_plot.assert_called_once_with(
+        prometheus_url="http://prometheus-0:9090",
+        output_path=Path("/tmp/log/metrics_plot.png"),
+    )
 
     request = fake_engine.simulate.await_args.args[0]
     assert isinstance(request, runtime_pb2.SimulationRequest)
@@ -550,11 +534,206 @@ async def test_run_simulation_one_shot_uses_daemon_engine(
 
 
 @pytest.mark.asyncio
+async def test_run_simulation_metrics_artifact_failure_is_best_effort(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_config = SimpleNamespace(
+        user=SimpleNamespace(
+            nr_workers=1,
+            prometheus=SimpleNamespace(url="http://prometheus-0:9090"),
+        ),
+    )
+    fake_eval_config = SimpleNamespace(run_in_runtime=True, enabled=True)
+    _patch_one_shot_inputs(
+        monkeypatch,
+        fake_config=fake_config,
+        fake_eval_config=fake_eval_config,
+        request=runtime_pb2.SimulationRequest(
+            rollout_specs=[
+                runtime_pb2.RolloutSpec(scenario_id="clipgt-a", nr_rollouts=1),
+            ]
+        ),
+    )
+    fake_engine = SimpleNamespace(
+        startup=AsyncMock(),
+        simulate=AsyncMock(
+            return_value=_make_simulation_return([("clipgt-a", True, None)])
+        ),
+        shutdown=AsyncMock(),
+    )
+    monkeypatch.setattr(
+        "alpasim_runtime.simulate.__main__.DaemonEngine",
+        Mock(return_value=fake_engine),
+    )
+    generate_metrics_plot = Mock(
+        side_effect=RuntimeError("Prometheus query failed: bad result")
+    )
+    monkeypatch.setattr(
+        "alpasim_runtime.simulate.__main__.generate_metrics_plot",
+        generate_metrics_plot,
+    )
+    monkeypatch.setattr(
+        "alpasim_runtime.simulate.__main__.get_run_name",
+        Mock(return_value="run-name"),
+    )
+    run_aggregation_from_runtime = Mock(return_value=True)
+    monkeypatch.setattr(
+        "alpasim_runtime.simulate.__main__.run_aggregation_from_runtime",
+        run_aggregation_from_runtime,
+    )
+
+    success = await run_simulation(_make_one_shot_args(log_dir=str(tmp_path)))
+
+    assert success is True
+    generate_metrics_plot.assert_called_once()
+    run_aggregation_from_runtime.assert_called_once()
+    error_path = tmp_path / "prometheus" / "metrics_plot_error.txt"
+    assert error_path.read_text(encoding="utf-8") == (
+        "RuntimeError: Prometheus query failed: bad result"
+    )
+
+
+@pytest.mark.asyncio
+async def test_run_simulation_does_not_aggregate_failed_rollouts_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_config = SimpleNamespace(
+        user=SimpleNamespace(
+            nr_workers=1,
+            prometheus=SimpleNamespace(url="http://prometheus-0:9090"),
+        ),
+    )
+    fake_eval_config = SimpleNamespace(run_in_runtime=True, enabled=True)
+    _patch_one_shot_inputs(
+        monkeypatch,
+        fake_config=fake_config,
+        fake_eval_config=fake_eval_config,
+        request=runtime_pb2.SimulationRequest(
+            rollout_specs=[
+                runtime_pb2.RolloutSpec(scenario_id="clipgt-a", nr_rollouts=1),
+                runtime_pb2.RolloutSpec(scenario_id="clipgt-b", nr_rollouts=1),
+            ]
+        ),
+    )
+
+    simulation_return = _make_simulation_return(
+        [
+            ("clipgt-a", True, None),
+            ("clipgt-b", False, "Maximum allowed size exceeded"),
+        ]
+    )
+    fake_engine = SimpleNamespace(
+        startup=AsyncMock(),
+        simulate=AsyncMock(return_value=simulation_return),
+        shutdown=AsyncMock(),
+    )
+    monkeypatch.setattr(
+        "alpasim_runtime.simulate.__main__.DaemonEngine",
+        Mock(return_value=fake_engine),
+    )
+    monkeypatch.setattr(
+        "alpasim_runtime.simulate.__main__.generate_metrics_plot",
+        Mock(return_value="/tmp/log/metrics_plot.png"),
+    )
+    monkeypatch.setattr(
+        "alpasim_runtime.simulate.__main__.get_run_name",
+        Mock(return_value="run-name"),
+    )
+    run_aggregation_from_runtime = Mock(return_value=True)
+    monkeypatch.setattr(
+        "alpasim_runtime.simulate.__main__.run_aggregation_from_runtime",
+        run_aggregation_from_runtime,
+    )
+
+    success = await run_simulation(_make_one_shot_args())
+
+    assert success is False
+    fake_engine.shutdown.assert_awaited_once()
+    run_aggregation_from_runtime.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_run_simulation_aggregates_failed_rollouts_when_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_config = SimpleNamespace(
+        user=SimpleNamespace(
+            nr_workers=1,
+            prometheus=SimpleNamespace(url="http://prometheus-0:9090"),
+        ),
+    )
+    fake_eval_config = SimpleNamespace(
+        run_in_runtime=True,
+        enabled=True,
+        allow_aggregation_with_failed_rollouts=True,
+    )
+    _patch_one_shot_inputs(
+        monkeypatch,
+        fake_config=fake_config,
+        fake_eval_config=fake_eval_config,
+        request=runtime_pb2.SimulationRequest(
+            rollout_specs=[
+                runtime_pb2.RolloutSpec(scenario_id="clipgt-a", nr_rollouts=1),
+                runtime_pb2.RolloutSpec(scenario_id="clipgt-b", nr_rollouts=1),
+            ]
+        ),
+    )
+
+    simulation_return = _make_simulation_return(
+        [
+            ("clipgt-a", True, None),
+            ("clipgt-b", False, "Maximum allowed size exceeded"),
+        ]
+    )
+    fake_engine = SimpleNamespace(
+        startup=AsyncMock(),
+        simulate=AsyncMock(return_value=simulation_return),
+        shutdown=AsyncMock(),
+    )
+    monkeypatch.setattr(
+        "alpasim_runtime.simulate.__main__.DaemonEngine",
+        Mock(return_value=fake_engine),
+    )
+    monkeypatch.setattr(
+        "alpasim_runtime.simulate.__main__.generate_metrics_plot",
+        Mock(return_value="/tmp/log/metrics_plot.png"),
+    )
+    monkeypatch.setattr(
+        "alpasim_runtime.simulate.__main__.get_run_name",
+        Mock(return_value="run-name"),
+    )
+    run_aggregation_from_runtime = Mock(return_value=True)
+    monkeypatch.setattr(
+        "alpasim_runtime.simulate.__main__.run_aggregation_from_runtime",
+        run_aggregation_from_runtime,
+    )
+
+    success = await run_simulation(_make_one_shot_args())
+
+    assert success is True
+    fake_engine.shutdown.assert_awaited_once()
+    failed_rollouts = run_aggregation_from_runtime.call_args.kwargs["failed_rollouts"]
+    assert failed_rollouts == [
+        FailedRollout(
+            run_name="run-name",
+            run_uuid=None,
+            clipgt_id="clipgt-b",
+            rollout_id="failed-1",
+            error="Maximum allowed size exceeded",
+        )
+    ]
+
+
+@pytest.mark.asyncio
 async def test_run_simulation_one_shot_fails_when_result_count_mismatches_jobs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fake_config = SimpleNamespace(
-        user=SimpleNamespace(nr_workers=1),
+        user=SimpleNamespace(
+            nr_workers=1,
+            prometheus=SimpleNamespace(url="http://prometheus-0:9090"),
+        ),
     )
     fake_eval_config = SimpleNamespace(run_in_runtime=False, enabled=False)
     _patch_one_shot_inputs(
@@ -586,16 +765,6 @@ async def test_run_simulation_one_shot_fails_when_result_count_mismatches_jobs(
         Mock(return_value=fake_engine),
     )
 
-    shutdown_services = AsyncMock()
-    monkeypatch.setattr(
-        "alpasim_runtime.simulate.__main__.shutdown_services",
-        shutdown_services,
-    )
-    merge_metrics_files = Mock()
-    monkeypatch.setattr(
-        "alpasim_runtime.simulate.__main__.merge_metrics_files",
-        merge_metrics_files,
-    )
     generate_metrics_plot = Mock()
     monkeypatch.setattr(
         "alpasim_runtime.simulate.__main__.generate_metrics_plot",
@@ -612,8 +781,6 @@ async def test_run_simulation_one_shot_fails_when_result_count_mismatches_jobs(
         await run_simulation(args)
 
     fake_engine.shutdown.assert_awaited_once()
-    shutdown_services.assert_awaited_once_with(fake_config)
-    merge_metrics_files.assert_not_called()
     generate_metrics_plot.assert_not_called()
 
 
@@ -622,7 +789,10 @@ async def test_run_simulation_one_shot_shutdowns_when_engine_simulate_raises(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fake_config = SimpleNamespace(
-        user=SimpleNamespace(nr_workers=1),
+        user=SimpleNamespace(
+            nr_workers=1,
+            prometheus=SimpleNamespace(url="http://prometheus-0:9090"),
+        ),
     )
     fake_eval_config = SimpleNamespace(run_in_runtime=False, enabled=False)
     _patch_one_shot_inputs(
@@ -647,12 +817,6 @@ async def test_run_simulation_one_shot_shutdowns_when_engine_simulate_raises(
         Mock(return_value=fake_engine),
     )
 
-    shutdown_services = AsyncMock()
-    monkeypatch.setattr(
-        "alpasim_runtime.simulate.__main__.shutdown_services",
-        shutdown_services,
-    )
-
     args = _make_one_shot_args()
 
     with pytest.raises(RuntimeError, match="simulate failed"):
@@ -661,7 +825,6 @@ async def test_run_simulation_one_shot_shutdowns_when_engine_simulate_raises(
     fake_engine.startup.assert_awaited_once()
     fake_engine.simulate.assert_awaited_once()
     fake_engine.shutdown.assert_awaited_once()
-    shutdown_services.assert_awaited_once_with(fake_config)
 
 
 @pytest.mark.asyncio
@@ -669,7 +832,10 @@ async def test_run_simulation_one_shot_shutdowns_when_engine_startup_raises(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fake_config = SimpleNamespace(
-        user=SimpleNamespace(nr_workers=1),
+        user=SimpleNamespace(
+            nr_workers=1,
+            prometheus=SimpleNamespace(url="http://prometheus-0:9090"),
+        ),
     )
     fake_eval_config = SimpleNamespace(run_in_runtime=False, enabled=False)
     _patch_one_shot_inputs(
@@ -694,12 +860,6 @@ async def test_run_simulation_one_shot_shutdowns_when_engine_startup_raises(
         Mock(return_value=fake_engine),
     )
 
-    shutdown_services = AsyncMock()
-    monkeypatch.setattr(
-        "alpasim_runtime.simulate.__main__.shutdown_services",
-        shutdown_services,
-    )
-
     args = _make_one_shot_args()
 
     with pytest.raises(RuntimeError, match="startup failed"):
@@ -707,4 +867,3 @@ async def test_run_simulation_one_shot_shutdowns_when_engine_startup_raises(
 
     fake_engine.simulate.assert_not_awaited()
     fake_engine.shutdown.assert_awaited_once()
-    shutdown_services.assert_awaited_once_with(fake_config)

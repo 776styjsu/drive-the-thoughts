@@ -17,7 +17,7 @@ the recorded ASL logs every time they make an intentional change to runtime**
 To generate the needed files to be replayed, run, from src/wizard:
 
 ```
-RUN_DIR=<redacted-path> \
+RUN_DIR=/home/migl/workspace/alpasim/.wizard \
 uv run python -m alpasim_wizard \
     wizard.log_dir=${RUN_DIR} \
     deploy=local topology=1gpu driver=vavam \

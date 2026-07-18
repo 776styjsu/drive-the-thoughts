@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shlex
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -14,10 +15,16 @@ from typing import Any
 from alpasim_utils.paths import find_repo_root
 
 from ..context import WizardContext
+from ..schema import RunMode
 from ..services import ContainerDefinition, build_container_set
 from ..utils import LiteralStr, write_yaml
 
 logger = logging.getLogger(__name__)
+
+
+def _netrc_secret_file() -> Path | None:
+    netrc_path = Path.home() / ".netrc"
+    return netrc_path if netrc_path.is_file() else None
 
 
 class DockerComposeDeployment:
@@ -37,7 +44,7 @@ class DockerComposeDeployment:
 
         Note: This does not actually start the services. This can be done using
         ```bash
-        docker compose up
+        docker compose up --exit-code-from runtime-0
         ```
         """
         self.docker_compose_filepath = self.generate_docker_compose_yaml(
@@ -52,11 +59,30 @@ class DockerComposeDeployment:
         """Run docker compose up to deploy all services."""
         log_dir = self.context.cfg.wizard.log_dir
         compose_file = Path(log_dir) / self.docker_compose_filepath
-        logger.info("Running docker compose: %s", compose_file)
+        command = [
+            "docker",
+            "compose",
+            "-f",
+            str(compose_file),
+            "up",
+        ]
+        if self.container_set.runtime:
+            command.extend(
+                [
+                    "--remove-orphans",
+                    "--exit-code-from",
+                    "runtime-0",
+                ]
+            )
 
+        if self.context.cfg.wizard.dry_run:
+            logger.info("[DRY-RUN] Would execute: %s", shlex.join(command))
+            return
+
+        logger.info("Running docker compose: %s", compose_file)
         try:
             subprocess.run(
-                ["docker", "compose", "-f", str(compose_file), "up"],
+                command,
                 check=True,
                 cwd=log_dir,
             )
@@ -79,6 +105,7 @@ class DockerComposeDeployment:
             Docker Compose service configuration dict
         """
         ret: dict[str, Any] = {}
+        service_config = container.service_config
         use_host_network = self.context.cfg.wizard.debug_flags.use_localhost
         if use_host_network:
             # Tell Docker to use the host network
@@ -86,18 +113,18 @@ class DockerComposeDeployment:
         else:
             ret["networks"] = ["microservices_network"]
         ret["volumes"] = [v.to_str() for v in container.volumes]
-        ret["pull_policy"] = "missing"
-        ret["image"] = container.service_config.image
+        ret["pull_policy"] = service_config.pull_policy
+        ret["image"] = service_config.image
 
         repo_root = str(find_repo_root(__file__))
 
-        if not container.service_config.external_image:
+        if not service_config.external_image:
             build_config: dict[str, Any] = {
                 "context": repo_root,
                 "dockerfile": "Dockerfile",
-                "tags": [container.service_config.image],
+                "tags": [service_config.image],
             }
-            if Path.home().joinpath(".netrc").exists():
+            if _netrc_secret_file() is not None:
                 build_config["secrets"] = ["netrc"]
             ret["build"] = build_config
 
@@ -108,7 +135,7 @@ class DockerComposeDeployment:
             # We use \$ to declare fields that should not be interpreted by
             # 'our' OmegaConf parser, but by downstream parsers in the service.
             # Furhtermore, for docker-compose, we need to escape $ as $$
-            command = command.replace(r"\$", "$$")
+            command = command.replace("$", "$$")
             # Set permissive umask so files written to bind-mounted volumes
             # are accessible by the host user (containers run as root).
             command = "umask 0000\n" + command
@@ -122,12 +149,18 @@ class DockerComposeDeployment:
             ret["environment"] = container.environments
 
         addresses = container.get_all_addresses()
-        if addresses and use_host_network:
-            # Only expose ports to host when using host network mode.
-            # With bridge network, containers communicate internally via container
-            # names as DNS hostnames on the shared network, so no port mapping is
-            # needed. Omitting ports avoids conflicts with other workloads.
-            ports = [f"{addr.port}:{addr.port}" for addr in addresses]
+        publish_runtime_server_port = (
+            container.name == "runtime"
+            and self.context.cfg.wizard.run_mode == RunMode.SERVER
+        )
+        ports: list[str] = []
+        if not use_host_network and container.published_ports:
+            ports.extend(
+                f"{port}:{port}" for port in container.published_ports.values()
+            )
+        if addresses and (use_host_network or publish_runtime_server_port):
+            ports.extend(f"{addr.port}:{addr.port}" for addr in addresses)
+        if ports:
             ret["ports"] = ports
 
         if container.gpu is not None:
@@ -139,6 +172,20 @@ class DockerComposeDeployment:
                                 "driver": "nvidia",
                                 "capabilities": ["gpu"],
                                 "device_ids": [str(container.gpu)],
+                            }
+                        ]
+                    }
+                }
+            }
+        elif container.name == "prometheus" and self.context.num_gpus > 0:
+            ret["deploy"] = {
+                "resources": {
+                    "reservations": {
+                        "devices": [
+                            {
+                                "driver": "nvidia",
+                                "count": "all",
+                                "capabilities": ["gpu"],
                             }
                         ]
                     }
@@ -161,38 +208,25 @@ class DockerComposeDeployment:
         # Simulation services (runtime should start last)
         for c in container_set.sim or []:
             if c.command == "noop":
-                # Special logic to support sensorsim/physics combined process
+                # Special logic to support renderer/physics combined process.
                 continue
             service = self._to_docker_compose_service(c)
             services[c.uuid] = service
 
-        # Add runtime services last
-        for c in container_set.runtime or []:
-            service = self._to_docker_compose_service(c)
-            # Runtime needs host PID namespace for process monitoring
-            service["pid"] = "host"
-            # Runtime needs access to all GPUs for telemetry/resource monitoring
-            service["deploy"] = {
-                "resources": {
-                    "reservations": {
-                        "devices": [
-                            {
-                                "driver": "nvidia",
-                                "count": "all",
-                                "capabilities": ["gpu"],
-                            }
-                        ]
-                    }
-                }
-            }
-            services[c.uuid] = service
+        service = self._to_docker_compose_service(container_set.prometheus)
+        services[container_set.prometheus.uuid] = service
+
+        # Add runtime service last
+        if container_set.runtime is not None:
+            service = self._to_docker_compose_service(container_set.runtime)
+            services[container_set.runtime.uuid] = service
 
         # Create compose structure with ordered services
         compose: dict[str, Any] = {
             "networks": {"microservices_network": {"driver": "bridge"}},
             "services": services,  # Services maintain insertion order in Python 3.7+
         }
-        if Path.home().joinpath(".netrc").exists():
+        if _netrc_secret_file() is not None:
             compose["secrets"] = {"netrc": {"file": "${HOME}/.netrc"}}
 
         # Write to file

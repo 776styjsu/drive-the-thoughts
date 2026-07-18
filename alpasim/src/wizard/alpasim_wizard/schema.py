@@ -34,6 +34,7 @@ class AlpasimConfig:
     trafficsim: DictConfig = field(default_factory=lambda: OmegaConf.create({}))
     eval: DictConfig = field(default_factory=lambda: OmegaConf.create({}))
     driver: DictConfig = field(default_factory=lambda: OmegaConf.create({}))
+    controller: DictConfig = field(default_factory=lambda: OmegaConf.create({}))
 
 
 @dataclass
@@ -62,7 +63,7 @@ class ScenesConfig:
     # all scenes in the directory will be simulated.
     local_usdz_dir: str | None = None
 
-    # used to override services.sensorsim.image for the USDZ database service if NRE is not enabled
+    # Used to override services.renderer.image for the USDZ database service if NRE is not enabled.
     nre_version_string: str | None = None
 
 
@@ -74,10 +75,25 @@ class RunMethod(Enum):
 
 
 class RunMode(Enum):
-    # TODO: delete in favor of hydra overrides for debugging
-    BATCH = "batch"
-    ATTACH_BASH = "attach_bash"
-    ATTACH_VSCODE = "attach_vscode"
+    """Runtime lifecycle mode.
+
+    ONESHOT starts the runtime to execute the generated simulation once and
+    then exit. SERVER starts a long-running runtime daemon that serves
+    simulation requests over gRPC.
+    """
+
+    ONESHOT = "oneshot"
+    SERVER = "server"
+
+
+@dataclass
+class WizardPrometheusConfig:
+    """Prometheus ownership, identity, and discovery settings."""
+
+    scrape_interval: str = "5s"
+    file_sd_dir: str | None = None
+    start_prometheus: bool = True
+    run_uuid: str | None = None
 
 
 @dataclass
@@ -89,6 +105,7 @@ class WizardConfig:
 
     # Global log level for all alpasim services (DEBUG, INFO, WARNING, ERROR)
     log_level: str = "INFO"
+    prometheus: WizardPrometheusConfig = field(default_factory=WizardPrometheusConfig)
     description: str | None = None  # TODO(mwatson): is this redundant to run_name?
     submitter: str | None = None
 
@@ -97,6 +114,7 @@ class WizardConfig:
     array_job_dir: str | None = None
     dry_run: bool = MISSING
     baseport: int = MISSING
+    runtime_server_port: int | None = None
     validate_mount_points: bool = MISSING
 
     # If set, the wizard will pull the driver code from the specified hash into
@@ -125,6 +143,11 @@ class WizardConfig:
     # allocations on CI nodes), otherwise overlapping steps are killed.
     slurm_cpu_bind_none: bool = False
 
+    # Run GPU services through CUDA MPS so kernels from co-located processes
+    # execute concurrently instead of time-slicing between CUDA contexts.
+    # Starts a per-job MPS control daemon on the node. SLURM only.
+    enable_mps: bool = False
+
     # External service addresses for services running outside the deployment.
     # Maps service name to list of addresses (e.g., {"driver": ["localhost:6789"]}).
     # These addresses are added to generated-network-config.yaml so the runtime
@@ -135,30 +158,35 @@ class WizardConfig:
 @dataclass
 class ServicesConfig:
     driver: ServiceConfig | None = MISSING
-    sensorsim: ServiceConfig | None = MISSING
+    renderer: ServiceConfig | None = MISSING
     physics: ServiceConfig | None = MISSING
     trafficsim: ServiceConfig | None = MISSING
     controller: ServiceConfig | None = MISSING
     runtime: RuntimeServiceConfig = MISSING
+    prometheus: ContainerConfig = MISSING
 
 
 @dataclass
-class ServiceConfig:
+class ContainerConfig:
     volumes: list[str] = field(default_factory=list)
     image: str = MISSING
     # Images that don't correspond to a service in the repo.
     # No Dockerfile path is added to the docker-compose.yaml.
     external_image: bool = False
+    pull_policy: str = "missing"
+    environments: list[str] = field(default_factory=list)
+    workdir: str | None = None
+    remap_root: bool = False
+
+
+@dataclass
+class ServiceConfig(ContainerConfig):
     command: list[str] = MISSING
     # Number of service replicas to run per container.
     # If gpus is None or empty, creates a single container with this many replicas.
     # If gpus is specified, creates one container per GPU, each with this many replicas.
     replicas_per_container: int = MISSING
     gpus: list[int] | None = MISSING
-
-    environments: list[str] = field(default_factory=list)
-    workdir: str | None = None
-    remap_root: bool = False
 
 
 @dataclass

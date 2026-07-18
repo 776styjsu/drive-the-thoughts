@@ -2,11 +2,15 @@
 # 8-GPU topology: 12 concurrent rollouts. For SLURM cluster runs.
 
 defines:
-  nre_cache_size: 4  # sensorsim.n_concurrent_rollouts + 1
+  nre_cache_size: 16  # (renderer.n_concurrent_rollouts(=3) + buffer(=1)) x expected_camera_count (=4)
   physics_cache_size: 16
 
+trafficsim:
+  server:
+    max_workers: 6
+
 services:
-  sensorsim:
+  renderer:
     replicas_per_container: 1
     gpus: [0, 1, 2, 3]
 
@@ -30,11 +34,12 @@ runtime:
   nr_workers: 1
   endpoints:
     # Total capacity per service = nr_gpus x replicas_per_container x n_concurrent_rollouts
-    # SENS: 4 x 1 x 3 = 12
+    # REND: 4 x 1 x 3 = 12
     # DRIV: 4 x 1 x 3 = 12
     # PHYS: 6 x 1 x 2 = 12
     # CONT: 1 (CPU) x 2 x 6 = 12
-    sensorsim:
+    # TRAF: 2 x 1 x 6 = 12
+    renderer:
       n_concurrent_rollouts: 3
     driver:
       n_concurrent_rollouts: 3
@@ -43,6 +48,5 @@ runtime:
       skip: false
     controller:
       n_concurrent_rollouts: 6
-      skip: false
     trafficsim:
-      skip: true
+      n_concurrent_rollouts: 6
