@@ -15,4 +15,46 @@ runs/
 logs/
 test_runs/
 benchmark_side_by_side/
+data/benchmark/viewer.html
+data/benchmark/*.viewer.html
+data/benchmark/*.annotator.html
+data/benchmark/*.review.html
+# Annotator handover bundles: generated page plus a copy of its media.
+data/benchmark/annotation/
+# Raw exports from individual annotators are not released.
+data/benchmark/annotations_*.json
 *.log
+
+# Simulator scene assets (hundreds of GB); never stage them
+alpasim/data/nre-artifacts/
+
+.env
+.env.*
+!.env.example
+
+# Paper sources, trial builds and backups stay local: the LaTeX still carries
+# the (commented-out) author block, so it must not reach the anonymous mirror.
+docs/Drive_the_Thoughts__*/
+docs/paper_*/
+
+# LaTeX build artifacts
+docs/**/*.aux
+docs/**/*.bbl
+docs/**/*.blg
+docs/**/*.fdb_latexmk
+docs/**/*.fls
+docs/**/*.out
+docs/**/*.synctex.gz
+docs/**/main.pdf
+# Local scene sets not used in the paper (only ood_hazard_2604 is released).
+alpasim/data/scenes/HAZARD_CHALLENGE_2601.md
+alpasim/data/scenes/sim_scenes_alpamayo_stress.csv
+alpasim/data/scenes/sim_scenes_hazard_challenge_2601.csv
+alpasim/data/scenes/sim_scenes_hazard_next6_2601.csv
+alpasim/data/scenes/sim_scenes_hazard_next6_2601_provenance.json
+alpasim/data/scenes/sim_scenes_reported_alpamayo1_failure.csv
+alpasim/data/scenes/sim_scenes_test.csv
+alpasim/data/scenes/sim_suites_hazard_challenge_2601.csv
+alpasim/data/scenes/sim_suites_reported_alpamayo1_failure.csv
+# Release tooling and the anonymous working clone (term list lives here).
+.release/
