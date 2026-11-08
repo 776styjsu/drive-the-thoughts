@@ -1,0 +1,48 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "drive-the-thoughts-selforacle"
+version = "0.1.0"
+description = "Isolated SelfOracle adaptation for AlpaSim camera streams"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+dependencies = ["numpy>=1.26,<3", "Pillow>=10,<13", "scipy>=1.13,<2"]
+
+[project.optional-dependencies]
+cpu = ["torch==2.11.0"]
+cuda = ["torch==2.11.0"]
+dev = ["pytest>=8,<10"]
+
+[project.scripts]
+selforacle = "selforacle_baseline.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/selforacle_baseline"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"THIRD_PARTY_NOTICES" = "selforacle_baseline/THIRD_PARTY_NOTICES"
+
+[tool.uv]
+conflicts = [[{ extra = "cpu" }, { extra = "cuda" }]]
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cpu", extra = "cpu" },
+  { index = "pytorch-cu128", extra = "cuda" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
