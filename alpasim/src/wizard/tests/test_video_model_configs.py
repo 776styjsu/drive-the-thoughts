@@ -29,6 +29,20 @@ def test_standard_deploy_keeps_controller_enabled_after_topology_overrides() -> 
     assert cfg.runtime.endpoints.controller.n_concurrent_rollouts == 4
 
 
+def test_local_apptainer_deploy_configures_renderer() -> None:
+    cfg = _compose_config(
+        "deploy=local_apptainer",
+        "topology=1gpu",
+        "driver=alpamayo1_5",
+        "wizard.log_dir=/tmp/alpasim-test",
+    )
+
+    assert cfg.wizard.run_method.value == "apptainer"
+    assert cfg.defines.renderer_entrypoint == "/app/run"
+    assert cfg.services.renderer.replicas_per_container == 1
+    assert cfg.services.renderer.gpus == [0]
+
+
 def test_managed_flashdreams_uses_local_image_without_pulling() -> None:
     cfg = _compose_config(
         "deploy=managed_flashdreams",

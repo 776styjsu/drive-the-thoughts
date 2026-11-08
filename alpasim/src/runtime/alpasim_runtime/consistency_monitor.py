@@ -327,12 +327,12 @@ def _lane_center_lines_from_vector_map(vector_map: Any) -> list[np.ndarray] | No
 def _trajectory_to_world_and_rig_xy(
     trajectory: Trajectory,
 ) -> tuple[np.ndarray | None, np.ndarray | None]:
-    """Return (world_xy, rig_xy) future positions from a drive trajectory.
+    """Return (world_xy, rig_xy) positions from a drive trajectory.
 
-    The trajectory's first pose is the current ego pose (anchor). World XY are
-    the future positions in the local/map frame; rig XY are those positions
-    expressed relative to the anchor (matching the offline judge's ego frame:
-    X forward, Y left).
+    The trajectory's first pose is the current ego pose (anchor) and is kept as
+    t=0, so rig XY starts at the origin. World XY are the positions in the
+    local/map frame; rig XY are those positions expressed in the anchor frame
+    (X forward, Y left), matching the offline judge's ``trajectory_xy_rig_frame``.
     """
     try:
         positions = np.asarray(trajectory.positions, dtype=float)
@@ -341,14 +341,14 @@ def _trajectory_to_world_and_rig_xy(
     if positions.ndim != 2 or positions.shape[0] < 3:
         return None, None
 
-    world_xy = positions[1:, :2]
+    world_xy = positions[:, :2]
 
     try:
         anchor_inverse = trajectory.first_pose.inverse()
         rig_positions = np.asarray(
             trajectory.transform(anchor_inverse).positions, dtype=float
         )
-        rig_xy = rig_positions[1:, :2]
+        rig_xy = rig_positions[:, :2]
     except Exception:
         return world_xy, None
     return world_xy, rig_xy

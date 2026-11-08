@@ -17,7 +17,7 @@
 #
 # The judge is an OpenAI-compatible endpoint:
 #   - gpt  -> OpenAI GPT-5.5     (needs OPENAI_API_KEY)
-#   - kimi -> UVA RC Kimi K2.5   (needs UVA_RC_GENAI_KEY)
+#   - kimi -> Moonshot Kimi K2.5 (needs MOONSHOT_API_KEY)
 #   - qwen / qwen35 -> a local vLLM server (start it separately with
 #     `tools/serve_qwen3_4b_fp8_vllm.sh serve`, or point QWEN3_BASE_URL at one;
 #     set START_VLLM=1 to launch one on this job — shares the GPU, keep
@@ -35,14 +35,40 @@
 #SBATCH --partition=gpu
 #SBATCH --mem=24G
 #SBATCH -J "alpamayo_monitor_run"
-#SBATCH --account=elbaumhpc
+#SBATCH --account=your_hpc_account
 #SBATCH --output=logs/alpamayo_monitor_run_%A_%a.out
 #SBATCH --error=logs/alpamayo_monitor_run_%A_%a.err
 
 set -euo pipefail
 
 # ---------- Config (override via sbatch --export=ALL,NAME=value,...) ----------
-REPO_ROOT="${REPO_ROOT:-/project/AV/alpasim}"
+find_repo_root() {
+  local candidate
+
+  # sbatch copies this script into /var/spool before executing it, so
+  # BASH_SOURCE points at the copy. Recover the checkout from the directory
+  # where sbatch was invoked instead.
+  if [[ -n "${SLURM_SUBMIT_DIR:-}" ]]; then
+    for candidate in "$SLURM_SUBMIT_DIR" "$SLURM_SUBMIT_DIR/alpasim"; do
+      if [[ -f "$candidate/setup_local_env.sh" && -f "$candidate/tools/run_top_scenes_alpamayo.sh" ]]; then
+        (cd "$candidate" && pwd -P)
+        return
+      fi
+    done
+  fi
+
+  # Direct (non-sbatch) execution retains the script's real source path.
+  candidate="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+  if [[ -f "$candidate/setup_local_env.sh" && -f "$candidate/tools/run_top_scenes_alpamayo.sh" ]]; then
+    printf '%s\n' "$candidate"
+    return
+  fi
+
+  echo "Could not locate the AlpaSim repository. Set REPO_ROOT explicitly." >&2
+  return 1
+}
+
+REPO_ROOT="${REPO_ROOT:-$(find_repo_root)}"
 CSV_PATH="${CSV_PATH:-data/scenes/sim_scenes_monitor_resample_actionable.csv}"
 TOP_N="${TOP_N:-100}"
 START_INDEX="${START_INDEX:-0}"
@@ -60,7 +86,7 @@ SETUP_ENV="${SETUP_ENV:-1}"
 
 # ---------- Consistency monitor config ----------
 # Friendly judge switch. JUDGE selects the backend; an explicit MONITOR_PROVIDER
-# wins over JUDGE. gpt = OpenAI GPT-5.5, kimi = UVA Kimi K2.5, qwen/qwen35 =
+# wins over JUDGE. gpt = OpenAI GPT-5.5, kimi = Moonshot Kimi K2.5, qwen/qwen35 =
 # local vLLM.
 JUDGE="${JUDGE:-qwen}"
 if [[ -z "${MONITOR_PROVIDER:-}" ]]; then
@@ -68,7 +94,7 @@ if [[ -z "${MONITOR_PROVIDER:-}" ]]; then
     qwen)   MONITOR_PROVIDER="qwen3_4b_fp8" ;;
     qwen35) MONITOR_PROVIDER="qwen35_4b_fp8" ;;
     gpt)    MONITOR_PROVIDER="openai" ;;
-    kimi)   MONITOR_PROVIDER="uva" ;;
+    kimi)   MONITOR_PROVIDER="kimi" ;;
     *)
       echo "Unknown JUDGE='$JUDGE' (expected: qwen | qwen35 | gpt | kimi)" >&2
       exit 1
@@ -175,7 +201,7 @@ load_env_var() {
 # backend is authenticated regardless of which JUDGE is selected.
 JUDGE_ENV_VARS=(
   OPENAI_API_KEY OPENAI_BASE_URL
-  UVA_RC_GENAI_KEY UVA_RC_GENAI_BASE_URL
+  MOONSHOT_API_KEY MOONSHOT_BASE_URL
   QWEN3_API_KEY QWEN3_BASE_URL
   QWEN35_API_KEY QWEN35_BASE_URL
 )
@@ -188,7 +214,7 @@ done
 # The selected provider's key var, used only for the missing-key warning below.
 case "$MONITOR_PROVIDER" in
   openai)        JUDGE_KEY_VAR=OPENAI_API_KEY ;;
-  uva)           JUDGE_KEY_VAR=UVA_RC_GENAI_KEY ;;
+  kimi)          JUDGE_KEY_VAR=MOONSHOT_API_KEY ;;
   qwen3_4b_fp8)  JUDGE_KEY_VAR=QWEN3_API_KEY ;;
   qwen35_4b_fp8) JUDGE_KEY_VAR=QWEN35_API_KEY ;;
   *)             JUDGE_KEY_VAR="" ;;
@@ -196,7 +222,7 @@ esac
 
 # Remote judges (gpt/kimi) call an external API; never auto-start a local vLLM,
 # and warn early if their key is missing (the monitor would silently no-op).
-if [[ "$MONITOR_PROVIDER" == "openai" || "$MONITOR_PROVIDER" == "uva" ]]; then
+if [[ "$MONITOR_PROVIDER" == "openai" || "$MONITOR_PROVIDER" == "kimi" ]]; then
   START_VLLM=0
   if [[ -z "${!JUDGE_KEY_VAR:-}" ]]; then
     echo "WARNING: $JUDGE_KEY_VAR not found in environment or $REPO_ROOT/.env; the " \

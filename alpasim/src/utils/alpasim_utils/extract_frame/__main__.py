@@ -11,16 +11,115 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.style as mplstyle
 import numpy as np
-from alpasim_utils.lane_projection import compute_lane_relative_trajectory
 from alpasim_utils.logs import async_read_pb_log
+from matplotlib.patches import Rectangle
+
+from alpasim_utils.lane_projection import compute_lane_relative_trajectory
 from alpasim_utils.trajectory_additional_info import (
     DEFAULT_OUTPUT_FILENAME as ADDITIONAL_INFO_FILENAME,
 )
 from alpasim_utils.trajectory_additional_info import build_additional_info
-from matplotlib.patches import Rectangle
 
 mpl.use("Agg")
 mplstyle.use("fast")
+
+#: Per-rollout camera calibration, written once into the output directory so
+#: the extracted frames can have rig-frame geometry projected onto them.
+CAMERA_CALIBRATION_FILENAME = "camera_calibration.json"
+
+
+def write_camera_calibration(available_cameras_return, output_dir: Path) -> Path:
+    """Save the logged ``available_cameras_return`` as JSON.
+
+    Each camera keeps its proto field names (``intrinsics.ftheta_param``,
+    ``rig_to_camera.vec``/``quat``, ...). As in ``eval.data.CameraProjector``,
+    ``rig_to_camera`` is effectively the camera pose in the rig frame, so
+    projecting a rig-frame point uses its inverse.
+    """
+    from google.protobuf.json_format import MessageToDict
+
+    cameras = {
+        camera.logical_id: MessageToDict(camera, preserving_proto_field_name=True)
+        for camera in available_cameras_return.available_cameras
+    }
+    path = Path(output_dir) / CAMERA_CALIBRATION_FILENAME
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w") as f:
+        json.dump({"cameras": cameras}, f, indent=2)
+        f.write("\n")
+    return path
+
+
+async def extract_camera_calibration(asl_path: str, output_dir: str) -> Path | None:
+    """Write only the camera calibration, stopping as soon as it is logged."""
+    async for message in async_read_pb_log(asl_path):
+        if message.WhichOneof("log_entry") == "available_cameras_return":
+            path = write_camera_calibration(
+                message.available_cameras_return, Path(output_dir)
+            )
+            print(f"Saved Camera Calibration: {path}")
+            return path
+    print(f"No available_cameras_return in {asl_path}")
+    return None
+
+
+def _eval_config_candidates(
+    asl_path: str | Path,
+) -> list[tuple[Path, str | None]]:
+    """Return eval config candidates in preferred lookup order.
+
+    Rollout ASLs normally live at
+    ``<run-dir>/rollouts/<scene>/<rollout>/rollout.asl``. The generated eval
+    config is a sibling of ``rollouts`` and is the most precise source for that
+    run. Keep the historical cwd-relative lookup last for compatibility with
+    older extraction layouts.
+    """
+    resolved_asl_path = Path(asl_path).expanduser().resolve()
+    rollouts_dir = next(
+        (parent for parent in resolved_asl_path.parents if parent.name == "rollouts"),
+        None,
+    )
+
+    candidates: list[tuple[Path, str | None]] = []
+    if rollouts_dir is not None:
+        run_dir = rollouts_dir.parent
+        candidates.extend(
+            [
+                (run_dir / "eval-config.yaml", None),
+                (run_dir / "wizard-config-loadable.yaml", "eval"),
+                (run_dir / "wizard-config.yaml", "eval"),
+            ]
+        )
+
+    candidates.append((Path("outputs/wizard-config-loadable.yaml").resolve(), "eval"))
+    return candidates
+
+
+def _load_eval_config(asl_path: str | Path, omega_conf, eval_config_cls):
+    """Load the eval config belonging to ``asl_path`` and merge its schema."""
+    candidates = _eval_config_candidates(asl_path)
+    source = next(
+        ((path, section) for path, section in candidates if path.is_file()),
+        None,
+    )
+    if source is None:
+        checked_paths = ", ".join(str(path) for path, _ in candidates)
+        raise FileNotFoundError(
+            f"Could not find an eval configuration for {asl_path}. "
+            f"Checked: {checked_paths}"
+        )
+
+    config_path, section = source
+    loaded_cfg = omega_conf.load(config_path)
+    if section is not None:
+        if section not in loaded_cfg:
+            raise ValueError(
+                f"Expected section {section!r} in eval configuration {config_path}"
+            )
+        loaded_cfg = loaded_cfg[section]
+
+    print(f"Loaded eval configuration: {config_path}")
+    return omega_conf.merge(omega_conf.structured(eval_config_cls), loaded_cfg)
 
 
 def render_eval_visualization(
@@ -421,6 +520,95 @@ def write_lane_relative_sidecar(
         json.dump(data, f, indent=2)
 
 
+def _read_monitor_decisions(asl_path: str) -> dict[int, dict]:
+    """Read the runtime's per-step candidate selection beside a rollout ASL."""
+    audit_path = Path(asl_path).with_name("consistency_monitor.jsonl")
+    if not audit_path.exists():
+        return {}
+    decisions = {}
+    with audit_path.open(encoding="utf-8") as source:
+        for line_number, line in enumerate(source, 1):
+            if not line.strip():
+                continue
+            try:
+                record = json.loads(line)
+                timestamp = record["time_now_us"]
+                chosen = record["chosen_attempt"]
+                count = record["num_attempts"]
+                if (
+                    any(type(value) is not int for value in (timestamp, chosen, count))
+                    or not 0 <= chosen < count
+                    or timestamp in decisions
+                ):
+                    raise ValueError("invalid or duplicate selection")
+            except (TypeError, KeyError, ValueError) as exc:
+                raise ValueError(
+                    f"Invalid monitor decision at {audit_path}:{line_number}"
+                ) from exc
+            decisions[timestamp] = record
+    return decisions
+
+
+async def _selected_driver_messages(asl_path: str, target_time_us: int | None = None):
+    """Yield one selected request/response pair per step, preserving other logs.
+
+    Buffer only one step's candidate responses. Legacy single-call rollouts
+    need no audit file; multiple candidates require the runtime's selection so
+    extraction cannot silently substitute the final rejected sample.
+    """
+    decisions = _read_monitor_decisions(asl_path)
+    candidates = []
+    step_time = None
+    pending = None
+
+    def selected_pair():
+        if not candidates:
+            return ()
+        if (
+            target_time_us is not None
+            and step_time != target_time_us
+            and all(
+                request.driver_request.time_query_us != target_time_us
+                for request, _ in candidates
+            )
+        ):
+            return ()
+        decision = decisions.get(step_time)
+        if decision is None:
+            if len(candidates) != 1:
+                raise ValueError(
+                    f"Cannot select from {len(candidates)} driver candidates at "
+                    f"time_now_us={step_time}: missing consistency_monitor.jsonl "
+                    "decision. Keep the audit sidecar with the rollout ASL."
+                )
+            return candidates[0]
+        if decision["num_attempts"] != len(candidates):
+            raise ValueError(
+                "Monitor audit/log candidate count mismatch at "
+                f"time_now_us={step_time}: "
+                f"audit={decision['num_attempts']}, log={len(candidates)}"
+            )
+        return candidates[decision["chosen_attempt"]]
+
+    async for message in async_read_pb_log(asl_path):
+        kind = message.WhichOneof("log_entry")
+        if kind == "driver_request":
+            timestamp = message.driver_request.time_now_us
+            if step_time is not None and timestamp != step_time:
+                for selected in selected_pair():
+                    yield selected
+                candidates.clear()
+            step_time = timestamp
+            pending = message
+        elif kind == "driver_return" and pending is not None:
+            candidates.append((pending, message))
+            pending = None
+        else:
+            yield message
+    for selected in selected_pair():
+        yield selected
+
+
 async def extract_inference(
     asl_path: str,
     output_dir: str,
@@ -441,11 +629,10 @@ async def extract_inference(
     eval_cfg = None
     try:
         from alpasim_utils.artifact import Artifact
-        from omegaconf import OmegaConf
-
         from eval.accumulator import EvalDataAccumulator
         from eval.data import SimulationResult
         from eval.schema import EvalConfig
+        from omegaconf import OmegaConf
 
         print("Discovering map artifacts for full visualization...")
         artifacts = {}
@@ -460,11 +647,7 @@ async def extract_inference(
             except Exception:
                 pass
 
-        eval_cfg = OmegaConf.structured(EvalConfig)
-        if Path("outputs/wizard-config-loadable.yaml").exists():
-            wiz_cfg = OmegaConf.load("outputs/wizard-config-loadable.yaml")
-            if "eval" in wiz_cfg:
-                eval_cfg = OmegaConf.merge(eval_cfg, wiz_cfg.eval)
+        eval_cfg = _load_eval_config(asl_path, OmegaConf, EvalConfig)
 
         acc = EvalDataAccumulator(cfg=eval_cfg)
         preload_scene_id = "unknown"
@@ -498,12 +681,16 @@ async def extract_inference(
     # Since driver_camera_image.frame_end_us typically matches driver_request.time_now_us
     frames_metadata = {}
 
-    async for message in async_read_pb_log(asl_path):
+    async for message in _selected_driver_messages(asl_path, target_time_us):
         msg_type = message.WhichOneof("log_entry")
 
         if msg_type == "rollout_metadata":
             if message.rollout_metadata.session_metadata is not None:
                 scene_id = message.rollout_metadata.session_metadata.scene_id
+
+        elif msg_type == "available_cameras_return":
+            path = write_camera_calibration(message.available_cameras_return, out_path)
+            print(f"Saved Camera Calibration: {path}")
 
         # 1. Inputs: Related Images (these happen BEFORE driver_request in the log)
         elif msg_type == "driver_camera_image":
@@ -745,7 +932,19 @@ if __name__ == "__main__":
         action="store_true",
         help=f"Skip writing the {ADDITIONAL_INFO_FILENAME} sidecar next to each metadata.json.",
     )
+    parser.add_argument(
+        "--calibration-only",
+        action="store_true",
+        help=(
+            f"Only write {CAMERA_CALIBRATION_FILENAME} into --output-dir, e.g. to "
+            "backfill an extraction made before it was written."
+        ),
+    )
     args = parser.parse_args()
+
+    if args.calibration_only:
+        asyncio.run(extract_camera_calibration(args.asl_path, args.output_dir))
+        raise SystemExit(0)
 
     # Create an asyncio event loop to run the async generator
     asyncio.run(

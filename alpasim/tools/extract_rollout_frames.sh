@@ -7,15 +7,15 @@ usage() {
 Usage: tools/extract_rollout_frames.sh [options]
 
 Extract camera frames, metadata, CoT, trajectory plots, and additional_info.json
-from completed Alpasim rollout.asl files.
+once for every scene_* directory in an AlpaSim run.
 
 Options:
-  -r, --run-dir PATH        Run directory containing rollouts/ (default: tutorial_alpamayo15_coverage_boost)
-  -o, --output-dir PATH     Output directory (default: <run-dir>/extracted_frames)
+  -r, --run-dir PATH        Directory containing scene_* directories
+                            (default: tutorial_alpamayo_ood_hazard_2604)
       --time TIME_US        Extract only one matching time_query_us or time_now_us
-      --include-incomplete  Process rollout.asl files even without sibling _complete marker
+      --include-incomplete  Use the newest rollout even if it has no _complete marker
       --no-additional-info  Skip writing additional_info.json sidecars
-      --resume              Skip scenes whose output dir already exists and is non-empty
+      --resume              Skip scenes whose extracted_frames dir is already non-empty
       --dry-run             Print extraction commands without running them
   -h, --help                Show this help
 
@@ -23,15 +23,14 @@ Examples:
   tools/extract_rollout_frames.sh
 
   tools/extract_rollout_frames.sh \
-    --run-dir tutorial_alpamayo15_coverage_boost \
-    --output-dir tutorial_alpamayo15_coverage_boost/extracted_frames
+    --run-dir tutorial_alpamayo_ood_hazard_2604 \
+    --resume
 
   tools/extract_rollout_frames.sh --time 3900000
 EOF
 }
 
-RUN_DIR="tutorial_alpamayo15_coverage_boost"
-OUTPUT_DIR=""
+RUN_DIR="tutorial_alpamayo_ood_hazard_2604"
 TIME_US=""
 INCLUDE_INCOMPLETE=0
 NO_ADDITIONAL_INFO=0
@@ -42,10 +41,6 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     -r|--run-dir)
       RUN_DIR="$2"
-      shift 2
-      ;;
-    -o|--output-dir)
-      OUTPUT_DIR="$2"
       shift 2
       ;;
     --time)
@@ -80,53 +75,79 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z "${OUTPUT_DIR}" ]]; then
-  OUTPUT_DIR="${RUN_DIR}/extracted_frames"
-fi
-
-if [[ ! -d "${RUN_DIR}/rollouts" ]]; then
-  echo "Missing rollout directory: ${RUN_DIR}/rollouts" >&2
+if [[ ! -d "${RUN_DIR}" ]]; then
+  echo "Missing run directory: ${RUN_DIR}" >&2
   exit 1
 fi
 
 export UV_LINK_MODE="${UV_LINK_MODE:-copy}"
 
-mapfile -t ASL_FILES < <(
-  if [[ "${INCLUDE_INCOMPLETE}" -eq 1 ]]; then
-    find -L "${RUN_DIR}/rollouts" -path '*/rollout.asl' -type f | sort
-  else
-    find -L "${RUN_DIR}/rollouts" -path '*/_complete' -type f \
-      | sort \
-      | while read -r complete_marker; do
-          rollout_dir="$(dirname "${complete_marker}")"
-          asl="${rollout_dir}/rollout.asl"
-          [[ -f "${asl}" ]] && printf '%s\n' "${asl}"
-        done
-  fi
+mapfile -t SCENE_DIRS < <(
+  find -L "${RUN_DIR}" -mindepth 1 -maxdepth 1 -type d -name 'scene_*' \
+    | sort -V
 )
 
-if [[ "${#ASL_FILES[@]}" -eq 0 ]]; then
-  echo "No rollout.asl files found under ${RUN_DIR}/rollouts" >&2
+if [[ "${#SCENE_DIRS[@]}" -eq 0 ]]; then
+  echo "No scene_* directories found under ${RUN_DIR}" >&2
   exit 1
 fi
 
-mkdir -p "${OUTPUT_DIR}"
-
 echo "Run dir: ${RUN_DIR}"
-echo "Output dir: ${OUTPUT_DIR}"
-echo "Found ${#ASL_FILES[@]} rollout(s)."
+echo "Found ${#SCENE_DIRS[@]} scene(s)."
 
-for asl in "${ASL_FILES[@]}"; do
-  rollout_dir="$(dirname "${asl}")"
-  scene_dir="$(dirname "${rollout_dir}")"
+extracted_count=0
+skipped_count=0
+missing_count=0
+
+for scene_dir in "${SCENE_DIRS[@]}"; do
   scene_id="$(basename "${scene_dir}")"
-  scene_output_dir="${OUTPUT_DIR}/${scene_id}"
+  rollouts_dir="${scene_dir}/rollouts"
+  scene_output_dir="${scene_dir}/extracted_frames"
 
   if [[ "${RESUME}" -eq 1 && -d "${scene_output_dir}" ]] && [[ -n "$(ls -A "${scene_output_dir}" 2>/dev/null)" ]]; then
     echo
     echo "Skipping ${scene_id} (already extracted)"
+    ((skipped_count += 1))
     continue
   fi
+
+  if [[ ! -d "${rollouts_dir}" ]]; then
+    echo
+    echo "Skipping ${scene_id} (missing ${rollouts_dir})" >&2
+    ((missing_count += 1))
+    continue
+  fi
+
+  if [[ "${INCLUDE_INCOMPLETE}" -eq 1 ]]; then
+    mapfile -t ASL_FILES < <(
+      find -L "${rollouts_dir}" -path '*/rollout.asl' -type f \
+        -printf '%T@ %p\n' \
+        | sort -nr \
+        | cut -d ' ' -f 2-
+    )
+  else
+    mapfile -t ASL_FILES < <(
+      find -L "${rollouts_dir}" -path '*/_complete' -type f \
+        -printf '%T@ %h\n' \
+        | sort -nr \
+        | cut -d ' ' -f 2- \
+        | while IFS= read -r completed_rollout_dir; do
+            asl_path="${completed_rollout_dir}/rollout.asl"
+            [[ -f "${asl_path}" ]] && printf '%s\n' "${asl_path}"
+          done
+    )
+  fi
+
+  if [[ "${#ASL_FILES[@]}" -eq 0 ]]; then
+    echo
+    echo "Skipping ${scene_id} (no eligible rollout.asl found)" >&2
+    ((missing_count += 1))
+    continue
+  fi
+
+  # A scene may contain old or failed attempts. Extract only the newest eligible
+  # rollout so that every scene is processed exactly once.
+  asl="${ASL_FILES[0]}"
 
   cmd=(
     uv run --extra eval python -m alpasim_utils.extract_frame
@@ -151,12 +172,15 @@ for asl in "${ASL_FILES[@]}"; do
     printf '  Command:'
     printf ' %q' "${cmd[@]}"
     printf '\n'
+    ((extracted_count += 1))
     continue
   fi
 
   mkdir -p "${scene_output_dir}"
   "${cmd[@]}"
+  ((extracted_count += 1))
 done
 
 echo
-echo "Done. Extracted frames are under ${OUTPUT_DIR}"
+echo "Done. Extracted ${extracted_count} scene(s); skipped ${skipped_count}; no eligible rollout ${missing_count}."
+echo "Frames are under each scene's extracted_frames directory."

@@ -11,7 +11,7 @@
 #   sbatch --array=0-9 --export=ALL,TOP_N=100,SCENES_PER_TASK=10 \
 #     tools/run_top_scenes_alpamayo.slurm.sh
 
-#SBATCH --time=12:00:00
+#SBATCH --time=16:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=1
@@ -20,24 +20,52 @@
 #SBATCH --partition=gpu
 #SBATCH --mem=16G
 #SBATCH -J "alpamayo_run"
-#SBATCH --account=elbaumhpc
+#SBATCH --account=your_hpc_account
 #SBATCH --output=logs/alpamayo_run_%A_%a.out
 #SBATCH --error=logs/alpamayo_run_%A_%a.err
 
 set -euo pipefail
 
+find_repo_root() {
+  local candidate
+
+  # sbatch copies this script into /var/spool before executing it, so
+  # BASH_SOURCE points at the copy. Recover the checkout from the directory
+  # where sbatch was invoked instead.
+  if [[ -n "${SLURM_SUBMIT_DIR:-}" ]]; then
+    for candidate in "$SLURM_SUBMIT_DIR" "$SLURM_SUBMIT_DIR/alpasim"; do
+      if [[ -f "$candidate/setup_local_env.sh" && -f "$candidate/tools/run_top_scenes_alpamayo.sh" ]]; then
+        (cd "$candidate" && pwd -P)
+        return
+      fi
+    done
+  fi
+
+  # Direct (non-sbatch) execution retains the script's real source path.
+  candidate="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+  if [[ -f "$candidate/setup_local_env.sh" && -f "$candidate/tools/run_top_scenes_alpamayo.sh" ]]; then
+    printf '%s\n' "$candidate"
+    return
+  fi
+
+  echo "Could not locate the AlpaSim repository. Set REPO_ROOT explicitly." >&2
+  return 1
+}
+
 # ---------- Config (override via sbatch --export=ALL,NAME=value,...) ----------
-REPO_ROOT="${REPO_ROOT:-/project/AV/alpasim}"
-CSV_PATH="${CSV_PATH:-data/scenes/sim_scenes_monitor_resample_actionable.csv}"
-TOP_N="${TOP_N:-100}"
+REPO_ROOT="${REPO_ROOT:-$(find_repo_root)}"
+CSV_PATH="${CSV_PATH:-data/scenes/sim_scenes_ood_hazard_2604.csv}"
+TOP_N="${TOP_N:-200}"
 START_INDEX="${START_INDEX:-0}"
-SIM_STEPS="${SIM_STEPS:-100}"
+SIM_STEPS="${SIM_STEPS:-200}"
 DEPLOY="${DEPLOY:-local_apptainer}"
-LOG_ROOT="${LOG_ROOT:-tutorial_alpamayo_no_monitor}"
+LOG_ROOT="${LOG_ROOT:-tutorial_alpamayo_ood_hazard_2604}"
+# Images built alongside this checkout by default; point SIF_CACHE at a shared
+# cache when a worktree does not have its own multi-gigabyte SIF copies.
 SIF_CACHE="${SIF_CACHE:-$REPO_ROOT/sif-cache}"
 DRIVER="${DRIVER:-alpamayo1_5}"
 TOPOLOGY="${TOPOLOGY:-1gpu}"
-NRE_CACHE_SIZE="${NRE_CACHE_SIZE:-20}"
+NRE_CACHE_SIZE="${NRE_CACHE_SIZE:-5}"
 RESUME="${RESUME:-1}"
 CONTINUE_ON_ERROR="${CONTINUE_ON_ERROR:-1}"
 DRY_RUN="${DRY_RUN:-0}"

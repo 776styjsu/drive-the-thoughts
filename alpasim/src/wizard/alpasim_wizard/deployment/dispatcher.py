@@ -6,7 +6,7 @@
 import logging
 import subprocess
 from pathlib import Path
-from typing import Union
+from typing import Literal, Union, overload
 
 logger = logging.getLogger("alpasim_wizard_dispatcher")
 
@@ -17,12 +17,33 @@ class OsDispatchError(RuntimeError):
     pass
 
 
+@overload
+def dispatch_command(
+    cmd: str,
+    log_dir: Union[Path, str],
+    dry_run: bool = False,
+    blocking: Literal[True] = True,
+    start_new_session: bool = False,
+) -> str: ...
+
+
+@overload
+def dispatch_command(
+    cmd: str,
+    log_dir: Union[Path, str],
+    dry_run: bool = False,
+    blocking: Literal[False] = False,
+    start_new_session: bool = False,
+) -> subprocess.Popen[str] | None: ...
+
+
 def dispatch_command(
     cmd: str,
     log_dir: Union[Path, str],
     dry_run: bool = False,
     blocking: bool = True,
-) -> str:
+    start_new_session: bool = False,
+) -> str | subprocess.Popen[str] | None:
     """Execute a command with logging.
 
     Args:
@@ -30,9 +51,13 @@ def dispatch_command(
         log_dir: Directory for logging command output
         dry_run: If True, commands are logged but not executed
         blocking: If True, wait for completion and return output; if False, return immediately
+        start_new_session: Start a non-blocking command in a dedicated process
+            group so the caller can terminate it and all descendants. Ignored
+            for blocking commands.
 
     Returns:
-        Command output if blocking=True, empty string otherwise
+        Command output if blocking=True. If blocking=False, the running process
+        handle, or None for a dry run.
     """
     log_dir = Path(log_dir)
 
@@ -50,15 +75,15 @@ def dispatch_command(
     # Handle dry-run mode
     if dry_run:
         logger.info(f"[DRY-RUN] Would execute: {cmd}")
-        return ""
+        return "" if blocking else None
 
     logger.info(f"Executing: {cmd}")
 
     # Execute the command with output logging
     with open(output_log_file, "a") as log_file:
-        log_file.write(f"\n{'='*60}\n")
+        log_file.write(f"\n{'=' * 60}\n")
         log_file.write(f"Command: {cmd}\n")
-        log_file.write(f"{'='*60}\n")
+        log_file.write(f"{'=' * 60}\n")
         # Run the command and capture output
         try:
             # Blocking: pipe stdout so we can read it line-by-line.
@@ -73,6 +98,7 @@ def dispatch_command(
                 stderr=subprocess.STDOUT,
                 text=True,
                 bufsize=1,
+                start_new_session=start_new_session if not blocking else False,
             )
 
             if blocking:
@@ -94,9 +120,11 @@ def dispatch_command(
                 return "".join(output_lines)
             else:
                 logger.info(
-                    f"Started non-blocking process (output → {output_log_file}): {cmd}"
+                    "Started non-blocking process pid=%d "
+                    f"(output → {output_log_file}): {cmd}",
+                    process.pid,
                 )
-                return ""
+                return process
 
         except subprocess.SubprocessError as e:
             raise OsDispatchError(f"Failed to execute command '{cmd}': {e}")

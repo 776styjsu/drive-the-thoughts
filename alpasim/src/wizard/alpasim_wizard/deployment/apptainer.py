@@ -7,6 +7,9 @@ from __future__ import annotations
 
 import logging
 import os
+import signal
+import subprocess
+import time
 from pathlib import Path
 from typing import Any, List, Optional
 
@@ -16,6 +19,8 @@ from ..utils import image_url_to_apptainer_image
 from .dispatcher import dispatch_command
 
 logger = logging.getLogger(__name__)
+
+_SERVICE_SHUTDOWN_TIMEOUT_S = 10.0
 
 
 class ApptainerDeployment:
@@ -81,30 +86,150 @@ class ApptainerDeployment:
         containers_last = (
             [self.container_set.runtime] if self.container_set.runtime else []
         )
+        background_processes: list[tuple[str, subprocess.Popen[str]]] = []
 
-        for c in containers:
-            if c.command == "noop":
+        try:
+            for c in containers:
+                if c.command == "noop":
+                    continue
+                cmd = self._to_apptainer_exec(c)
+                process = dispatch_command(
+                    cmd,
+                    log_dir=Path(self.context.cfg.wizard.log_dir),
+                    dry_run=self.context.cfg.wizard.dry_run,
+                    blocking=False,
+                    start_new_session=True,
+                )
+                if process is not None:
+                    background_processes.append((c.uuid, process))
+
+            # Wait for services to come up before launching runtime
+            if containers_last and not self.context.cfg.wizard.dry_run:
+                self._wait_for_containers(containers)
+
+            for c in containers_last:
+                cmd = self._to_apptainer_exec(c)
+                dispatch_command(
+                    cmd,
+                    log_dir=Path(self.context.cfg.wizard.log_dir),
+                    dry_run=self.context.cfg.wizard.dry_run,
+                    blocking=True,
+                )
+        finally:
+            try:
+                self._cleanup_background_processes(background_processes)
+            except Exception:
+                # Cleanup must never hide a runtime/startup exception or turn
+                # an otherwise successful simulation into a failed one.
+                logger.exception(
+                    "Unexpected error while cleaning up Apptainer services"
+                )
+
+    def _cleanup_background_processes(
+        self,
+        processes: list[tuple[str, subprocess.Popen[str]]],
+        *,
+        timeout_s: float = _SERVICE_SHUTDOWN_TIMEOUT_S,
+    ) -> None:
+        """Terminate service process groups without leaking descendants.
+
+        Services are launched through ``shell=True`` and may create several
+        descendant processes inside Apptainer. The dispatcher starts each
+        service in a dedicated session, making its Popen pid the process-group
+        id. Signalling that group cleans up the shell, Apptainer, and the
+        service itself, even if an intermediate parent has already exited.
+        """
+        if not processes:
+            return
+
+        logger.info("Stopping %d Apptainer background services", len(processes))
+        remaining: list[tuple[str, subprocess.Popen[str]]] = []
+
+        # Signal every service first so their grace periods overlap.
+        for service_name, process in reversed(processes):
+            try:
+                os.killpg(process.pid, signal.SIGTERM)
+                remaining.append((service_name, process))
+            except ProcessLookupError:
+                # The entire process group has already exited.
+                self._reap_process(process)
+            except Exception as exc:
+                logger.warning(
+                    "Failed to terminate Apptainer service %s (pgid=%d): %s",
+                    service_name,
+                    process.pid,
+                    exc,
+                )
+
+        deadline = time.monotonic() + max(timeout_s, 0.0)
+        while remaining and time.monotonic() < deadline:
+            still_running = []
+            for item in remaining:
+                # Reap the direct child before probing its process group. A
+                # zombie group leader otherwise makes killpg(..., 0) report a
+                # live group until wait() is called, adding the full grace
+                # period to every successful scene teardown.
+                self._reap_process(item[1])
+                if self._process_group_exists(item[1].pid):
+                    still_running.append(item)
+            remaining = still_running
+            if remaining:
+                time.sleep(min(0.1, max(deadline - time.monotonic(), 0.0)))
+
+        killed_process_ids: set[int] = set()
+        for service_name, process in remaining:
+            if not self._process_group_exists(process.pid):
                 continue
-            cmd = self._to_apptainer_exec(c)
-            dispatch_command(
-                cmd,
-                log_dir=Path(self.context.cfg.wizard.log_dir),
-                dry_run=self.context.cfg.wizard.dry_run,
-                blocking=False,
+            logger.warning(
+                "Apptainer service %s (pgid=%d) did not stop after %.1fs; "
+                "sending SIGKILL",
+                service_name,
+                process.pid,
+                timeout_s,
+            )
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+                killed_process_ids.add(process.pid)
+            except ProcessLookupError:
+                pass
+            except Exception as exc:
+                logger.warning(
+                    "Failed to kill Apptainer service %s (pgid=%d): %s",
+                    service_name,
+                    process.pid,
+                    exc,
+                )
+
+        for _, process in processes:
+            # SIGKILL should make the direct child waitable immediately. Give
+            # it a short bounded wait to avoid accumulating zombie shells.
+            self._reap_process(
+                process,
+                timeout_s=1.0 if process.pid in killed_process_ids else 0.0,
             )
 
-        # Wait for services to come up before launching runtime
-        if containers_last and not self.context.cfg.wizard.dry_run:
-            self._wait_for_containers(containers)
+    @staticmethod
+    def _process_group_exists(process_group_id: int) -> bool:
+        """Return whether a process group still has live members."""
+        try:
+            os.killpg(process_group_id, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        return True
 
-        for c in containers_last:
-            cmd = self._to_apptainer_exec(c)
-            dispatch_command(
-                cmd,
-                log_dir=Path(self.context.cfg.wizard.log_dir),
-                dry_run=self.context.cfg.wizard.dry_run,
-                blocking=True,
-            )
+    @staticmethod
+    def _reap_process(
+        process: subprocess.Popen[str], *, timeout_s: float = 0.0
+    ) -> None:
+        """Reap an exited direct child without delaying service cleanup."""
+        try:
+            process.wait(timeout=timeout_s)
+        except subprocess.TimeoutExpired:
+            pass
+        except Exception as exc:
+            logger.warning("Failed to reap Apptainer process %d: %s", process.pid, exc)
 
     # ------------------------------------------------------------------
     # Command construction
@@ -143,13 +268,26 @@ class ApptainerDeployment:
         # Prepend module load so apptainer is available on HPC modules
         parts: list[str] = [
             "module load apptainer >/dev/null 2>&1 || module load apptainer/1.3.4 >/dev/null 2>&1 || true;",
-            "apptainer exec"
+            "apptainer exec",
         ]
 
         # GPU support
         if container.gpu is not None:
             parts.append("--nv")
-            parts.append(f"--env CUDA_VISIBLE_DEVICES={container.gpu}")
+            gpu_device = str(container.gpu)
+            # Topology indices are relative to this job's allocation. Apptainer
+            # --nv does not renumber host devices, so preserve Slurm's mapping
+            # instead of selecting physical GPU 0 in every one-GPU array task.
+            allocated = os.environ.get("CUDA_VISIBLE_DEVICES")
+            if os.environ.get("SLURM_JOB_ID") and allocated:
+                devices = [device.strip() for device in allocated.split(",")]
+                if not 0 <= container.gpu < len(devices):
+                    raise ValueError(
+                        f"GPU topology index {container.gpu} exceeds the "
+                        f"{len(devices)} devices allocated by Slurm"
+                    )
+                gpu_device = devices[container.gpu]
+            parts.append(f"--env CUDA_VISIBLE_DEVICES={gpu_device}")
 
         # Volume mounts
         for v in container.volumes:
@@ -164,14 +302,23 @@ class ApptainerDeployment:
         elif is_old_nurec:
             parts.append("--pwd /app/pycena_run.runfiles/nre_repo")
         elif is_new_nre:
-            parts.append("--pwd /app/internal/scripts/pycena/runtime/pycena_run.runfiles/_main")
+            parts.append("--pwd /app")
         else:
             parts.append("--pwd /repo")
 
         # Environment variables
         for e in container.environments or []:
             if "=" in e:
-                parts.append(f"--env {e}")
+                name, value = e.split("=", maxsplit=1)
+                if name == "HOME":
+                    # Apptainer intentionally rejects HOME overrides supplied
+                    # via --env. Its --home option both sets HOME and provides
+                    # the requested writable home directory.
+                    parts.append(f"--home {value}")
+                else:
+                    parts.append(f"--env {e}")
+            elif e == "HOME":
+                parts.append("--home ${HOME}")
             else:
                 # Pass-through from host: VAR → --env VAR=$VAR
                 parts.append(f"--env {e}=${{{e}}}")

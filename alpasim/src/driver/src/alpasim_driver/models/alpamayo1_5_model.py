@@ -16,7 +16,7 @@ from ..schema import ModelConfig
 from .alpamayo_base import CAMERA_NAME_TO_INDEX, AlpamayoBaseModel
 
 logger = logging.getLogger(__name__)
-_ATTN_IMPLEMENTATION = "sdpa"
+_ATTN_IMPLEMENTATION = "eager"
 
 
 class Alpamayo15Model(AlpamayoBaseModel):

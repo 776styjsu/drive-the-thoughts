@@ -109,9 +109,28 @@ class TestConsistencyMonitorUnit:
         traj = _make_world_traj(start=(5.0, 3.0), n=6, dx=1.0)
         world_xy, rig_xy = _trajectory_to_world_and_rig_xy(traj)
         assert world_xy is not None and rig_xy is not None
-        assert world_xy.shape == (5, 2)
-        np.testing.assert_allclose(world_xy[:, 0], [6, 7, 8, 9, 10], atol=1e-4)
+        assert world_xy.shape == (6, 2)
+        np.testing.assert_allclose(world_xy[:, 0], [5, 6, 7, 8, 9, 10], atol=1e-4)
         np.testing.assert_allclose(rig_xy, world_xy - np.array([5.0, 3.0]), atol=1e-4)
+        np.testing.assert_allclose(rig_xy[0], [0.0, 0.0], atol=1e-6)
+
+    def test_rig_extraction_rotates_into_anchor_heading(self):
+        # Ego faces world +y and drives straight: rig must read pure forward
+        # motion (+x), not the world-axis displacement (+y, i.e. "left").
+        ts = np.array([i * 100_000 for i in range(6)], dtype=np.uint64)
+        half = np.sqrt(0.5)
+        poses = [
+            Pose(
+                np.array([5.0, 3.0 + i, 0.0], dtype=np.float32),
+                np.array([0.0, 0.0, half, half], dtype=np.float32),
+            )
+            for i in range(6)
+        ]
+        traj = Trajectory.from_poses(timestamps=ts, poses=poses)
+        _, rig_xy = _trajectory_to_world_and_rig_xy(traj)
+        assert rig_xy is not None
+        np.testing.assert_allclose(rig_xy[:, 0], np.arange(6), atol=1e-4)
+        np.testing.assert_allclose(rig_xy[:, 1], 0.0, atol=1e-4)
 
     def test_short_trajectory_extraction_returns_none(self):
         traj = _make_world_traj(n=2)
