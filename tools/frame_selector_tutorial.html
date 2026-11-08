@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Practice selecting a benchmark frame</title>
+<style>
+.shell > *, .two > * { min-width: 0; }
+.two.only-clips { grid-template-columns: 1fr; }
+.two.only-clips .clip-list { display: flex; gap: 10px; }
+.nav { position: sticky; bottom: 0; z-index: 2; background: #f3f6faf5; padding: 12px 0; border-top: 1px solid #dce4ef; }
+@media(max-width:650px) { .two.only-clips .clip-list { display: grid; grid-template-columns: 1fr; } }
+:root{font-family:Inter,system-ui,-apple-system,sans-serif;color:#172c43;background:#f3f6fa;font-synthesis:none;--blue:#245ec9;--green:#148263;--line:#dce4ef;--muted:#586b83}
+*{box-sizing:border-box}body{margin:0}button,input,select,textarea{font:inherit}button,a.button{border:1px solid #cbd7e8;border-radius:8px;padding:9px 13px;background:#fff;color:#244263;text-decoration:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px}button:hover,a.button:hover{border-color:var(--blue);background:#f0f5ff}button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid #e3a33f;outline-offset:3px}button:disabled{opacity:.45;cursor:default}.primary,button.primary,a.primary{background:var(--blue);border-color:var(--blue);color:white}.primary:hover{background:#1c4ba5}h1,h2,h3,p{margin-top:0}h1{font-size:27px;letter-spacing:-.5px;margin-bottom:10px}h2{font-size:20px}h3{font-size:15px}p{line-height:1.6}.muted{color:var(--muted);font-size:13px}.eyebrow{font-size:11px;font-weight:750;text-transform:uppercase;letter-spacing:1.4px}.shell{display:grid;grid-template-columns:250px minmax(0,1fr);min-height:100vh}.sidebar{background:#152c48;color:#eaf0f9;padding:28px 20px}.brand{font-weight:700;font-size:15px;margin-bottom:8px}.sidebar p{color:#b6c7df;font-size:13px}.step-list{display:grid;gap:6px;margin:25px 0}.step-link{background:transparent;color:#c1d0e4;border-color:transparent;justify-content:flex-start;text-align:left;font-size:13px;width:100%;padding:11px 8px}.step-link:disabled{opacity:.65}.step-link.active{background:#294665;color:white;border-color:#55769e}.step-link.done{color:#9ae3c5}.step-number{display:inline-grid;place-items:center;border:1px solid currentColor;border-radius:50%;width:25px;height:25px;flex-shrink:0}.sidebar .progress{height:4px;background:#294665;border-radius:8px;overflow:hidden}.sidebar .progress span{height:100%;display:block;background:#79a9ff;transition:width .25s}.restart{background:transparent;color:white;margin-top:25px;font-size:12px}.content{width:100%;max-width:1280px;margin:auto;padding:28px 36px}.topline{display:flex;align-items:center;justify-content:space-between;gap:15px;margin-bottom:20px}.badge{background:#eaf0fb;color:#315c9a;font-size:12px;padding:5px 9px;border-radius:20px}.lesson{background:#fff;border:1px solid var(--line);border-radius:12px;padding:23px 25px;margin-bottom:20px}.lesson p{max-width:850px;margin-bottom:13px}.task{display:flex;align-items:flex-start;gap:10px;background:#eef4ff;border-radius:7px;padding:12px 14px;font-size:14px;line-height:1.5}.task strong{flex-shrink:0;color:var(--blue)}.workspace{display:grid;gap:15px}.card{background:#fff;border:1px solid var(--line);border-radius:11px;padding:18px;transition:box-shadow .2s,border-color .2s}.card.focus{border-color:var(--blue);box-shadow:0 0 0 3px #dce9ff}.card-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:8px}.card-head h3{margin:0}.sample-count{font-size:12px;color:var(--green);font-weight:650}.coverage{border-collapse:collapse;width:100%;font-size:13px}.coverage th{text-align:left;color:var(--muted);font-size:11px;font-weight:600;border-bottom:1px solid var(--line)}.coverage th,.coverage td{padding:9px 6px}.coverage td:first-child{width:48%}.category{padding:0;border:0;background:none;color:var(--blue);font-size:13px;text-align:left}.category.selected{font-weight:750}.track{height:5px;background:#edf1f7;margin-top:6px;display:flex;max-width:260px}.track span{background:#6b94d7}.track .added{background:var(--green)}.gap{font-weight:700;color:#a8680b}.two{display:grid;grid-template-columns:260px minmax(0,1fr);gap:15px}.clip{width:100%;display:block;text-align:left;margin:8px 0;padding:12px}.clip.active{background:#eef5ff;border-color:var(--blue)}.clip span{display:block;font-size:11px;color:var(--muted);margin-top:5px;line-height:1.4}.clip small{display:inline-block;margin-top:6px;color:var(--green)}.scene-preview{background:#e8eef3;border-radius:8px;overflow:hidden;position:relative}.scene-preview svg{width:100%;height:175px;display:block}.illustration-note{position:absolute;top:8px;left:9px;background:#ffffffec;border-radius:5px;padding:4px 7px;font-size:10px;color:#48637c}.moments{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0}.moment{flex:1;font-size:12px;padding:8px}.moment.active{background:#eaf1ff;color:#1d4ea8;border-color:#5f8bd2}input[type=range]{width:100%;accent-color:var(--blue)}.video-label{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin:10px 0}.cot{border-left:3px solid #5f8bd2;background:#f1f6fd;padding:12px;margin:12px 0;font-size:14px;line-height:1.5}.cot span{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px}.tag-controls{display:grid;grid-template-columns:1fr 1fr;gap:10px}.tag-controls label,.reason-label{font-size:12px;display:grid;gap:5px;color:var(--muted)}select,textarea{border:1px solid #cbd7e8;border-radius:6px;padding:8px;width:100%;color:#203b5e;background:white}textarea{min-height:67px;resize:vertical;font-size:13px}.check{display:flex;gap:8px;align-items:flex-start;font-size:12px;line-height:1.5;margin:12px 0}.tag{display:inline-block;background:#edf2f8;font-size:11px;padding:4px 8px;border-radius:20px;margin-right:5px}.reason-label{margin:12px 0}.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.result{background:#eaf8f1;color:#16694c;border-radius:7px;padding:11px;font-size:13px;line-height:1.5;margin:12px 0 0}.selection{border:1px dashed #cbd7e8;border-radius:7px;padding:11px;font-size:12px;line-height:1.6;margin-top:12px}.selection strong{color:var(--green)}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#142b44;color:#d8e8fa;border-radius:8px;padding:15px;line-height:1.6;font-size:12px}code{font-size:.92em}.nav{display:flex;align-items:center;justify-content:space-between;gap:15px;margin:23px 0 10px}.nav p{margin:0;font-size:12px;color:var(--muted)}.feedback{min-height:23px;margin:10px 0;color:var(--green);font-size:13px;line-height:1.5}.error{color:#aa3434}.learn-more{margin-top:25px;font-size:13px;line-height:1.6}.learn-more summary{cursor:pointer;color:var(--blue);font-weight:650}.learn-more p{margin:10px 0}a{color:var(--blue)}[hidden]{display:none!important}.annotation-list{font-size:14px;line-height:1.8;padding-left:20px}.finish{color:#13724e;font-weight:650}
+@media(max-width:1050px){.shell{grid-template-columns:210px minmax(0,1fr)}.content{padding:22px}.two{grid-template-columns:1fr}.clip-list{display:grid;grid-template-columns:1fr 1fr;gap:8px}.clip{margin:0}.clip:last-child{grid-column:1/-1}.topline{align-items:flex-start}}
+@media(max-width:650px){.shell{grid-template-columns:1fr}.sidebar{padding:16px}.sidebar .intro,.sidebar .restart{display:none}.step-list{display:flex;overflow:auto;margin:12px 0}.step-link{min-width:max-content;width:auto;padding:7px}.step-link .step-name{display:none}.content{padding:17px 12px}.lesson{padding:18px}h1{font-size:22px}.tag-controls{grid-template-columns:1fr}.topline{flex-direction:column;gap:8px}.task{flex-direction:column;gap:3px}.coverage td:first-child{width:40%}.coverage td,.coverage th{padding:8px 3px}.nav{flex-wrap:wrap}.nav p{order:3;width:100%}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="shell">
+<aside class="sidebar" aria-label="Walkthrough progress">
+<div class="brand">Drive the Thoughts</div><p class="intro">A short, hands-on guide to selecting a new benchmark frame.</p>
+<div id="step-list" class="step-list"></div>
+<div class="progress" role="progressbar" aria-label="Tutorial progress" aria-valuemin="0" aria-valuemax="8" aria-valuenow="1"><span id="progress"></span></div>
+<button id="restart" class="restart">Restart practice</button>
+</aside>
+<main class="content">
+<div class="topline"><span class="eyebrow">Frame selection walkthrough</span><span class="badge">Illustrative data · separate from your workspace</span></div>
+<section class="lesson" aria-labelledby="lesson-title">
+<p class="eyebrow" id="step-position"></p><h1 id="lesson-title" tabindex="-1"></h1><p id="explanation"></p>
+<div class="task"><strong>Try it</strong><span id="instruction"></span></div>
+</section>
+<div class="workspace">
+<section id="coverage-card" class="card" aria-label="Example category counts">
+<div class="card-head"><h3>Which categories need more examples?</h3><span id="selected-count" class="sample-count">0 clips selected</span></div>
+<p class="muted">A small excerpt of the dashboard. Targets below are practice values.</p>
+<table class="coverage"><thead><tr><th>CoT category</th><th>Existing</th><th>Added</th><th>Target</th><th>Gap</th></tr></thead><tbody id="coverage-body"></tbody></table>
+</section>
+<div id="selection-work" class="two">
+<section id="clips-card" class="card">
+<h3>Choose a source clip</h3><div class="clip-list">
+<button id="clip-a" class="clip"><strong>Clip A · approaching a bend</strong><span>3 decision timestamps</span><small>Contains a speed-adaptation candidate</small></button>
+<button id="clip-b" class="clip"><strong>Clip B · following traffic</strong><span>Lead-following candidates</span></button>
+<button id="clip-c" class="clip"><strong>Clip C · neighborhood street</strong><span>Needs frame extraction</span></button>
+</div><p class="muted" style="margin-top:12px">Availability means distinct clips. Many frames in one clip still give you only one new benchmark case.</p>
+</section>
+<section id="frame-card" class="card">
+<div class="card-head"><h3>Clip A</h3><span class="muted">Illustrated rollout</span></div>
+<div class="scene-preview">
+<span class="illustration-note">Schematic example, not recorded footage</span>
+<svg viewBox="0 0 600 190" role="img" aria-label="An illustrated road curves past trees toward a crossing">
+<rect width="600" height="190" fill="#e4ece5"/><path d="M-30 160 C120 160 195 165 260 115 S410 65 640 65" stroke="#bcc5ce" stroke-width="77" fill="none"/><path d="M-30 160 C120 160 195 165 260 115 S410 65 640 65" stroke="#778594" stroke-width="66" fill="none"/><path d="M-30 160 C120 160 195 165 260 115 S410 65 640 65" stroke="#fff3cd" stroke-width="3" stroke-dasharray="19 12" fill="none"/>
+<g fill="#a3bbaa"><circle cx="55" cy="74" r="22"/><circle cx="112" cy="50" r="17"/><circle cx="209" cy="43" r="23"/><circle cx="366" cy="150" r="22"/><circle cx="431" cy="156" r="16"/></g>
+<g stroke="#e9edef" stroke-width="6"><path d="M480 43v45M491 43v45M502 43v45M513 43v45"/></g>
+<g id="ego-car" transform="translate(110 147)"><rect x="-19" y="-9" width="38" height="18" rx="5" fill="#1e5ecb"/><rect x="0" y="-6" width="8" height="12" rx="2" fill="#c4ddff"/></g>
+<g id="pedestrian" hidden><circle cx="493" cy="24" r="5" fill="#c67730"/><path d="M493 30v10m0-6-7 3m7-3 7 3" stroke="#c67730" stroke-width="3"/></g>
+</svg>
+</div>
+<div class="video-label"><span>Practice video position</span><output id="video-time" for="video-position">2.0 s</output></div>
+<input id="video-position" type="range" min="0" max="12" step="0.1" value="2" aria-label="Practice video position">
+<div class="actions"><button id="snap">Use nearest decision to video time</button></div>
+<div class="moments" aria-label="Extracted decision timestamps"><button class="moment active" data-time="2">2.0 s · cruise</button><button class="moment" data-time="6">6.0 s · road bend</button><button class="moment" data-time="10">10.0 s · crossing</button></div>
+<p id="frame-name" class="muted"></p><div id="cot" class="cot"></div>
+<div id="classification">
+<p id="suggestion-note" class="muted">Provisional category suggestion: set speed. Check the text before accepting it.</p>
+<div class="tag-controls"><label>Longitudinal decision<select id="longitudinal"><option value="set_speed_tracking">Set speed</option><option value="speed_adaptation_road_events">Speed adaptation</option><option value="yield_agent_right_of_way">Yield</option><option value="none">No longitudinal decision</option></select></label><label>Lateral decision<select id="lateral"><option value="lane_keeping_centering">Lane keep</option><option value="none">No lateral decision</option></select></label></div>
+<p style="margin:10px 0 0"><span class="tag">Causal factor: <span id="factor">road events</span></span></p>
+<label class="check"><input id="confirm" type="checkbox"> I checked the categories against the stated CoT.</label>
+</div>
+<div id="selection-controls">
+<label class="reason-label" for="reason">Why include this frame?<textarea id="reason" placeholder="Write a short reason for choosing this case."></textarea></label>
+<div class="actions"><button id="choose" class="primary">Select this frame</button><button id="replace" hidden>Replace with the 10.0 s decision</button></div>
+</div>
+<div id="selection-summary" class="selection">No frame selected from this clip.</div>
+</section>
+</div>
+<section id="export-card" class="card" hidden>
+<h3>Save your choice and hand it off</h3><p>The real selector offers two downloads. A session restores your work; selected examples become inputs to the annotation builder.</p>
+<div class="actions"><button id="save-session">Download practice session</button><button id="export-example" class="primary">Download practice example</button></div>
+<div id="export-result" class="result" hidden></div>
+<p class="muted" style="margin:12px 0 0">Practice files are marked <code>demo: true</code> and contain no real media paths. Do not use them as benchmark data.</p>
+</section>
+<section id="handoff-card" class="card" hidden>
+<h3>Selection is complete; annotation comes next</h3>
+<p>The real export opens in the existing annotator with its verdicts unanswered. It retains the source frame, categories and selection reason.</p>
+<ol class="annotation-list"><li>Judge CoT grounding, prescribed-action safety and coherence.</li><li>Judge CoT–trajectory consistency and planned-trajectory safety.</li><li>Export annotations for review before updating the benchmark.</li></ol>
+<p class="muted">The existing annotator shows trajectory evidence alongside its questions. If your protocol requires a blinded reliability pass, keep that pass restricted to the model’s available input evidence.</p>
+<details><summary>Command for your real selected examples</summary><pre>uv run python tools/build_benchmark_viewer.py --annotator \
+  --examples "$SELECTION/selected_examples.json" \
+  --bundle "$SELECTION/annotation_bundle" \
+  --title "New benchmark cases — annotation"</pre></details>
+<p class="finish" style="margin-top:18px">You are ready to select real examples.</p>
+<div class="actions"><a class="button primary" href="index.html">Open the real frame selector</a><a class="button" href="FRAME_SELECTION_TUTORIAL.md">Read the full tutorial</a></div>
+</section>
+</div>
+<p id="feedback" class="feedback" role="status" aria-live="polite"></p>
+<div class="nav"><button id="back">← Back</button><p id="navigation-note">Complete the small action to continue.</p><button id="next" class="primary">Next step →</button></div>
+<details class="learn-more"><summary>How this example differs from the real workspace</summary><p>This walkthrough uses one invented clip, three decision timestamps and a small category table. The real workspace has actual rollout videos, extracted input frames, all CoT categories, adjustable targets, and model-suggestion imports.</p><p>Here, targets are 3 for speed adaptation and 10 for yielding. They illustrate how counts change; they are not recommended sample sizes. Selection is manual, and one chosen timestamp replaces any earlier choice from the same clip.</p><p>The practice stays in this page’s memory. It does not use the real selector’s autosave, call a model, or change your benchmark. Restarting or reloading resets it.</p></details>
+</main>
+</div>
+<script>
+'use strict';
+(() => {
+  const $ = id => document.getElementById(id);
+  const steps = [{
+    name: 'Find a shortfall',
+    title: 'Start with the category counts',
+    text: 'Speed adaptation has only one example in this miniature benchmark. Its practice target is three, leaving a gap of two. Lead following is already well represented. Select to strengthen small sample sizes, not to change a reliability percentage.',
+    task: 'Click “Speed adaptation” in the table.',
+    focus: 'coverage-card'
+  }, {
+    name: 'Choose a clip',
+    title: 'Find a new source clip',
+    text: 'Clip A contains a decision about an upcoming bend. That makes it a candidate for speed adaptation. One clip contributes at most one case, even when several of its timestamps look useful.',
+    task: 'Open “Clip A · approaching a bend”.',
+    focus: 'clips-card'
+  }, {
+    name: 'Choose a moment',
+    title: 'Choose an actual model decision',
+    text: 'The CoT changes during a rollout. At 2 seconds the model cruises; at 6 seconds it slows for a bend; at 10 seconds it yields. Choose the moment that supports your sampling goal. The real tool pairs it with the recorded model input and emitted plan.',
+    task: 'Click the 6.0 s decision, or scrub near 6 seconds and press “Use nearest decision to video time”.',
+    focus: 'frame-card'
+  }, {
+    name: 'Check the tags',
+    title: 'Treat category suggestions as provisional',
+    text: 'This example deliberately starts with an incorrect “Set speed” suggestion. “Slow down for the sharp bend” describes speed adaptation to a road event. Correct the category before it contributes to the dashboard. This is not a reliability or safety judgment.',
+    task: 'Change the longitudinal decision to “Speed adaptation”, keep “Lane keep”, and confirm the categories.',
+    focus: 'frame-card'
+  }, {
+    name: 'Select and explain',
+    title: 'Record why this frame belongs',
+    text: 'A short reason makes your manual choice auditable. Selecting this frame adds one speed-adaptation case: the count becomes two, the gap becomes one, and only one clip is selected.',
+    task: 'Write a selection reason, then press “Select this frame”. For example: “Adds a road-bend speed-adaptation case from a new clip.”',
+    focus: 'frame-card'
+  }, {
+    name: 'Try a replacement',
+    title: 'A different frame replaces the first one',
+    text: 'Suppose you choose the yielding moment instead. Because both frames come from Clip A, the new choice replaces the old one. Speed adaptation returns to one; yielding rises from eight to nine. The number of selected clips stays at one.',
+    task: 'Press “Replace with the 10.0 s decision” and watch the counts change. The example supplies its yielding tags and logs the replacement.',
+    focus: 'frame-card'
+  }, {
+    name: 'Save and export',
+    title: 'Separate your session from the selected examples',
+    text: 'A session backup retains choices and their history so you can resume. The examples export contains one chosen frame per clip for the annotation builder. Choosing a frame does not label it reliable, consistent or safe.',
+    task: 'Download the practice example. You can also download its session to inspect the selection and replacement history.',
+    focus: 'export-card'
+  }, {
+    name: 'Begin annotation',
+    title: 'Hand the selected cases to the annotator',
+    text: 'You have selected one case and explained the choice. The next stage applies the annotation rubric independently. In the real workflow, export your selected examples, run the annotation builder, and review the resulting labels before adding them to the benchmark.',
+    task: 'Open the real selector when you are ready. The full tutorial contains setup, extraction and annotation commands.',
+    focus: 'handoff-card'
+  }, ];
+  const moments = {
+    2: {
+      cot: 'Maintain speed and keep the lane on this straight road.',
+      longitudinal: 'set_speed_tracking',
+      factor: 'road_events',
+      factorLabel: 'road events',
+      position: 'translate(110 147)'
+    },
+    6: {
+      cot: 'Slow down for the sharp bend ahead while keeping the lane.',
+      longitudinal: 'speed_adaptation_road_events',
+      factor: 'road_events',
+      factorLabel: 'road events',
+      position: 'translate(278 117) rotate(-29)'
+    },
+    10: {
+      cot: 'Yield to the pedestrian at the crossing while staying in the lane.',
+      longitudinal: 'yield_agent_right_of_way',
+      factor: 'critical_objects',
+      factorLabel: 'critical objects',
+      position: 'translate(446 78)'
+    },
+  };
+  const categories = [{
+    key: 'speed_adaptation_road_events',
+    name: 'Speed adaptation',
+    n: 1,
+    target: 3
+  }, {
+    key: 'yield_agent_right_of_way',
+    name: 'Yield',
+    n: 8,
+    target: 10
+  }, {
+    key: 'lead_obstacle_following',
+    name: 'Lead follow',
+    n: 52,
+    target: 20
+  }, ];
+  let step = 0,
+    completed = new Set(),
+    time = 2,
+    selected = null,
+    history = [],
+    focused = false,
+    clipOpened = false;
+
+  function message(text, error = false) {
+    $('feedback').textContent = text;
+    $('feedback').className = 'feedback' + (error ? ' error' : '');
+  }
+
+  function markDone() {
+    completed.add(step);
+    renderNavigation();
+  }
+
+  function renderCoverage() {
+    $('coverage-body').innerHTML = categories.map(c => {
+      const added = selected?.longitudinal === c.key ? 1 : 0,
+        scale = Math.max(c.n + added, c.target);
+      return `<tr data-category="${c.key}"><td><button class="category ${focused&&c.key==='speed_adaptation_road_events'?'selected':''}" data-focus="${c.key}">${c.name}</button><div class="track"><span style="width:${100*c.n/scale}%"></span><span class="added" style="width:${100*added/scale}%"></span></div></td><td>${c.n}</td><td class="added-count">${added}</td><td>${c.target}</td><td class="gap">${Math.max(0,c.target-c.n-added)}</td></tr>`;
+    }).join('');
+    document.querySelectorAll('[data-focus]').forEach(button => button.onclick = () => {
+      if (step !== 0) {
+        message('The table shows your counts. Continue with the current step.');
+        return;
+      }
+      if (button.dataset.focus !== 'speed_adaptation_road_events') {
+        message('Try speed adaptation: it has just one example and a gap of two.');
+        return;
+      }
+      focused = true;
+      markDone();
+      renderCoverage();
+      message('Speed adaptation: 1 existing + 0 added; 2 more examples would meet this practice target.');
+    });
+    $('selected-count').textContent = selected ? '1 clip selected' : '0 clips selected';
+  }
+
+  function renderNavigation() {
+    $('step-position').textContent = `Step ${step+1} of ${steps.length}`;
+    $('progress').style.width = `${100*(step+1)/steps.length}%`;
+    document.querySelector('[role=progressbar]').setAttribute('aria-valuenow', String(step + 1));
+    $('step-list').innerHTML = steps.map((s, i) => `<button class="step-link ${i===step?'active':''} ${completed.has(i)?'done':''}" data-step="${i}" ${i>step&&!completed.has(i-1)?'disabled':''} ${i===step?'aria-current="step"':''}><span class="step-number">${completed.has(i)?'✓':i+1}</span><span class="step-name">${s.name}</span></button>`).join('');
+    document.querySelectorAll('[data-step]').forEach(button => button.onclick = () => go(Number(button.dataset.step)));
+    $('back').disabled = step === 0;
+    $('next').disabled = !completed.has(step);
+    $('next').hidden = step === steps.length - 1;
+    $('navigation-note').textContent = step === 7 ? 'Practice complete. Your real selections are unchanged.' : completed.has(step) ? 'Done. Continue when you are ready.' : 'Complete the small action above to continue.';
+  }
+
+  function renderMoment() {
+    const m = moments[time];
+    $('video-position').value = time;
+    $('video-time').textContent = time.toFixed(1) + ' s';
+    $('ego-car').setAttribute('transform', m.position);
+    $('pedestrian').toggleAttribute('hidden', time !== 10);
+    $('frame-name').textContent = `demo_clip_A_t${String(time*10).padStart(4,'0')} · decision at ${time.toFixed(1)} s`;
+    $('cot').replaceChildren();
+    const label = document.createElement('span');
+    label.textContent = 'Chain of thought at this decision';
+    $('cot').append(label, document.createTextNode(m.cot));
+    document.querySelectorAll('[data-time]').forEach(b => b.classList.toggle('active', Number(b.dataset.time) === time));
+    $('factor').textContent = m.factorLabel;
+  }
+
+  function setMoment(value) {
+    if (step !== 2) {
+      message('Explore the decision timeline in step 3.');
+      return;
+    }
+    time = value;
+    renderMoment();
+    if (time === 6) {
+      markDone();
+      message('This is the road-bend decision. Its CoT is about speed adaptation.');
+    } else message(time === 2 ? 'Cruising does not address the rare category we are targeting. Try 6.0 s.' : 'Yielding is useful too, but this exercise starts with speed adaptation at 6.0 s.');
+  }
+
+  function renderSelection() {
+    const box = $('selection-summary');
+    box.replaceChildren();
+    if (!selected) {
+      box.textContent = 'No frame selected from this clip.';
+      return;
+    }
+    const title = document.createElement('strong');
+    title.textContent = `1 selected frame · Clip A · ${selected.time.toFixed(1)} s`;
+    box.append(title, document.createElement('br'), document.createTextNode(selected.reason));
+  }
+
+  function go(next) {
+    step = next;
+    message('');
+    const s = steps[step];
+    $('lesson-title').textContent = s.title;
+    $('explanation').textContent = s.text;
+    $('instruction').textContent = s.task;
+    document.querySelectorAll('.card').forEach(card => card.classList.toggle('focus', card.id === s.focus));
+    $('selection-work').hidden = step === 0 || step >= 6;
+    $('selection-work').classList.toggle('only-clips', step === 1);
+    $('export-card').hidden = step !== 6;
+    $('handoff-card').hidden = step !== 7;
+    $('frame-card').hidden = step < 2;
+    $('classification').hidden = step < 3 || step > 5;
+    $('selection-controls').hidden = step < 4 || step > 5;
+    $('replace').hidden = step !== 5;
+    $('choose').hidden = step !== 4;
+    $('longitudinal').disabled = step !== 3;
+    $('lateral').disabled = step !== 3;
+    $('confirm').disabled = step !== 3;
+    $('reason').disabled = step !== 4;
+    $('snap').disabled = step !== 2;
+    $('video-position').disabled = step !== 2;
+    document.querySelectorAll('[data-time]').forEach(b => b.disabled = step !== 2);
+    if (step === 3) {
+      time = 6;
+      $('longitudinal').value = completed.has(3) ? 'speed_adaptation_road_events' : 'set_speed_tracking';
+      $('lateral').value = 'lane_keeping_centering';
+      $('confirm').checked = completed.has(3);
+      $('suggestion-note').textContent = 'Example suggestion: Set speed. Correct it if the CoT describes another decision.';
+    }
+    if (step === 4) {
+      time = 6;
+      $('longitudinal').value = 'speed_adaptation_road_events';
+      $('lateral').value = 'lane_keeping_centering';
+      $('confirm').checked = true;
+    }
+    if (step === 5 && selected) {
+      time = selected.time;
+      $('longitudinal').value = selected.longitudinal;
+      $('reason').value = selected.reason;
+    }
+    if (step === 7) completed.add(7);
+    $('clip-a').classList.toggle('active', clipOpened);
+    renderMoment();
+    renderCoverage();
+    renderSelection();
+    renderNavigation();
+    $('lesson-title').focus({
+      preventScroll: true
+    });
+    window.scrollTo(0, 0);
+  }
+
+  function checkTags() {
+    if (step !== 3) return;
+    if ($('confirm').checked && $('longitudinal').value === 'speed_adaptation_road_events' && $('lateral').value === 'lane_keeping_centering') {
+      markDone();
+      message('Confirmed: speed adaptation, lane keeping, and road events. Reliability and safety remain unanswered.');
+    } else {
+      completed.delete(3);
+      renderNavigation();
+      if ($('confirm').checked) message('Read the CoT again: it slows for a bend. Choose Speed adaptation and Lane keep.', true);
+    }
+  }
+  $('longitudinal').onchange = () => {
+    $('confirm').checked = false;
+    checkTags();
+  };
+  $('lateral').onchange = () => {
+    $('confirm').checked = false;
+    checkTags();
+  };
+  $('confirm').onchange = checkTags;
+  $('clip-a').onclick = () => {
+    if (step !== 1) {
+      message('Open a clip in step 2.');
+      return;
+    }
+    clipOpened = true;
+    $('clip-a').classList.add('active');
+    markDone();
+    message('Clip A is ready. Next, choose which of its decision timestamps to include.');
+  };
+  $('clip-b').onclick = () => message('Clip B mostly offers lead-following examples. Clip A helps with the speed-adaptation shortfall in this exercise.');
+  $('clip-c').onclick = () => message('Extract the input frames, CoTs and plans before selecting a case from this clip. The full tutorial has the extraction command.');
+  document.querySelectorAll('[data-time]').forEach(b => b.onclick = () => setMoment(Number(b.dataset.time)));
+  $('video-position').oninput = () => {
+    $('video-time').textContent = Number($('video-position').value).toFixed(1) + ' s';
+  };
+  $('snap').onclick = () => {
+    const value = Number($('video-position').value);
+    setMoment([2, 6, 10].reduce((a, b) => Math.abs(a - value) <= Math.abs(b - value) ? a : b));
+  };
+  $('choose').onclick = () => {
+    const reason = $('reason').value.trim();
+    if (!reason) {
+      message('Add a short reason so your selection can be reviewed later.', true);
+      $('reason').focus();
+      return;
+    }
+    const previous = selected;
+    selected = {
+      time: 6,
+      longitudinal: 'speed_adaptation_road_events',
+      reason
+    };
+    history.push({
+      action: previous ? 'replace' : 'select',
+      previous,
+      selected: {
+        ...selected
+      }
+    });
+    time = 6;
+    renderCoverage();
+    renderSelection();
+    markDone();
+    message('Speed adaptation: 1 → 2. Gap: 2 → 1. Selected clips: 1.');
+  };
+  $('replace').onclick = () => {
+    const previous = selected;
+    selected = {
+      time: 10,
+      longitudinal: 'yield_agent_right_of_way',
+      reason: 'Adds a yielding case at a pedestrian crossing from Clip A.'
+    };
+    history.push({
+      action: 'replace',
+      previous,
+      selected: {
+        ...selected
+      }
+    });
+    time = 10;
+    renderMoment();
+    $('longitudinal').value = selected.longitudinal;
+    $('reason').value = selected.reason;
+    $('suggestion-note').textContent = 'Replacement example tags: Yield, Lane keep, Critical objects.';
+    renderCoverage();
+    renderSelection();
+    markDone();
+    message('Still 1 selected clip. Speed adaptation: 2 → 1. Yield: 8 → 9. The earlier frame remains in the selection history.');
+  };
+
+  function download(name, payload) {
+    const a = document.createElement('a'),
+      url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], {
+        type: 'application/json'
+      }));
+    a.href = url;
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  $('save-session').onclick = () => {
+    download('walkthrough_session.json', {
+      demo: true,
+      description: 'Illustrative practice only; not a real selector session.',
+      selected,
+      history
+    });
+    message('Practice session downloaded. In the real tool, a session also carries dataset identity, targets and imported suggestions.');
+  };
+  $('export-example').onclick = () => {
+    const m = moments[selected.time];
+    download('walkthrough_example.json', {
+      demo: true,
+      description: 'Illustrative example only. No real media paths; do not import as benchmark data.',
+      entries: [{
+        clip_id: `demo_clip_A_t${String(selected.time*10).padStart(4,'0')}`,
+        chain_of_thought: m.cot,
+        labels: {
+          cot_decision_label: {
+            high_level_decision: {
+              longitudinal: selected.longitudinal,
+              lateral: 'lane_keeping_centering'
+            },
+            critical_component_categories: [m.factor]
+          }
+        },
+        selection: {
+          method: 'manual_category_guided',
+          reason: selected.reason
+        }
+      }],
+      selection_history: history
+    });
+    markDone();
+    $('export-result').hidden = false;
+    $('export-result').textContent = 'One example exported, with its category labels and selection reason. It contains no reliability, consistency or safety verdict.';
+    message('Now see how the real export enters annotation.');
+  };
+  $('back').onclick = () => go(Math.max(0, step - 1));
+  $('next').onclick = () => {
+    if (completed.has(step)) go(Math.min(steps.length - 1, step + 1));
+  };
+  $('restart').onclick = () => {
+    step = 0;
+    completed = new Set();
+    time = 2;
+    selected = null;
+    history = [];
+    focused = false;
+    clipOpened = false;
+    $('reason').value = '';
+    $('confirm').checked = false;
+    $('export-result').hidden = true;
+    go(0);
+  };
+  go(0);
+})();
+</script>
+</body>
+</html>

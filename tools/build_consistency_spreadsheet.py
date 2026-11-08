@@ -17,12 +17,12 @@ to pull judge justifications and trajectory stats.
 
 Examples:
     uv run python tools/build_consistency_spreadsheet.py \
-        --consistency-file data/results/llm_matrix/gpt.f_llm_map_graph.run_003.json \
+        --consistency-file data/results/llm_matrix/opus.f_llm_map_graph.run_001.json \
         --benchmark-file data/benchmark/benchmark.json
 
     # Write an .xlsx instead of .csv (requires the 'xlsx' extra / openpyxl):
     uv run python tools/build_consistency_spreadsheet.py \
-        --consistency-file data/results/llm_matrix/gpt.f_llm_map_graph.run_003.json \
+        --consistency-file data/results/llm_matrix/opus.f_llm_map_graph.run_001.json \
         --benchmark-file data/benchmark/benchmark.json \
         --output pairs.xlsx
 """

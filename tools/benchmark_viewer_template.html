@@ -1,0 +1,842 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__PAGE_TITLE__</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --border: #e2e5ea;
+    --border-strong: #cbd2dc;
+    --text: #111827;
+    --muted: #5b6472;
+    --faint: #8b95a5;
+    --accent: #1f5fbf;
+    --accent-soft: #e8f0fd;
+    --good: #1f7a4d;
+    --good-soft: #e4f4ec;
+    --bad: #b3261e;
+    --bad-soft: #fbe9e7;
+    --warn: #8a6100;
+    --warn-soft: #fdf2dc;
+    --set-a: #1f5fbf;
+    --set-b: #b06f00;
+    --shadow: 0 1px 2px rgba(15, 23, 42, .06), 0 4px 14px rgba(15, 23, 42, .05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10141a;
+      --panel: #171d26;
+      --border: #262f3c;
+      --border-strong: #38445a;
+      --text: #e7ebf2;
+      --muted: #9aa5b5;
+      --faint: #6f7b8d;
+      --accent: #6aa6ff;
+      --accent-soft: #17263d;
+      --good: #63c495;
+      --good-soft: #12291f;
+      --bad: #ef8279;
+      --bad-soft: #2d1715;
+      --warn: #e0b45e;
+      --warn-soft: #2b2211;
+      --set-a: #6aa6ff;
+      --set-b: #e0a44e;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 4px 14px rgba(0, 0, 0, .3);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  a { color: var(--accent); }
+  header.top {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 18px;
+  }
+  .top-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  h1 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -.01em; }
+  .subtitle { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .spacer { flex: 1 1 auto; }
+  .control {
+    display: inline-flex; align-items: center; gap: 6px;
+    border: 1px solid var(--border-strong); border-radius: 7px;
+    background: var(--panel); color: var(--text);
+    padding: 5px 9px; font-size: 13px; cursor: pointer;
+  }
+  .control:hover { border-color: var(--accent); }
+  select.control, input.control { cursor: auto; }
+  input.control { min-width: 210px; }
+  .seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 7px; overflow: hidden; }
+  .seg button {
+    border: 0; background: var(--panel); color: var(--muted);
+    padding: 5px 11px; font-size: 13px; cursor: pointer; font-family: inherit;
+    border-right: 1px solid var(--border);
+  }
+  .seg button:last-child { border-right: 0; }
+  .seg button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  main { padding: 16px 18px 60px; max-width: 1680px; margin: 0 auto; }
+
+  /* ---------- diversity panel ---------- */
+  details.panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; box-shadow: var(--shadow); margin-bottom: 18px;
+  }
+  details.panel > summary {
+    cursor: pointer; padding: 11px 14px; font-weight: 620; font-size: 14px;
+    display: flex; align-items: center; gap: 10px; list-style: none;
+  }
+  details.panel > summary::-webkit-details-marker { display: none; }
+  details.panel > summary::before { content: "▸"; color: var(--faint); }
+  details.panel[open] > summary::before { content: "▾"; }
+  summary .hint { font-weight: 400; color: var(--muted); font-size: 12px; }
+  .panel-body { padding: 0 14px 14px; }
+  .facet-section { margin-top: 14px; }
+  .facet-section > h2 {
+    margin: 0 0 8px; font-size: 11px; font-weight: 700; letter-spacing: .07em;
+    text-transform: uppercase; color: var(--faint);
+    border-bottom: 1px solid var(--border); padding-bottom: 5px;
+  }
+  .facet-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); }
+  .facet h3 {
+    margin: 0 0 5px; font-size: 12.5px; font-weight: 620;
+    display: flex; align-items: baseline; gap: 8px;
+  }
+  .facet h3 .stat { font-weight: 400; font-size: 11.5px; color: var(--faint); margin-left: auto; }
+  .chips { display: flex; flex-direction: column; gap: 3px; }
+  .chip {
+    display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px;
+    border: 1px solid transparent; border-radius: 6px;
+    padding: 2px 6px; cursor: pointer; background: none;
+    font: inherit; font-size: 12.5px; color: var(--text); text-align: left; width: 100%;
+    position: relative; overflow: hidden;
+  }
+  .chip:hover { border-color: var(--border-strong); }
+  .chip.on { border-color: var(--accent); background: var(--accent-soft); }
+  .chip .name { position: relative; z-index: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chip .n { position: relative; z-index: 1; color: var(--muted); font-variant-numeric: tabular-nums; font-size: 11.5px; }
+  .chip .bar { position: absolute; left: 0; right: 0; top: 0; bottom: 0; display: flex; opacity: .26; }
+  .chip .bar span { height: 100%; }
+  .empty-note { color: var(--faint); font-size: 12px; }
+  .more-btn {
+    align-self: flex-start; margin-top: 2px; border: 0; background: none; cursor: pointer;
+    font: inherit; font-size: 11.5px; color: var(--accent); padding: 1px 6px;
+  }
+  .more-btn:hover { text-decoration: underline; }
+
+  /* ---------- cards ---------- */
+  .cards { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(520px, 1fr)); }
+  .cards.wide { grid-template-columns: 1fr; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: var(--shadow); overflow: hidden; display: flex; flex-direction: column;
+  }
+  .card-head {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 8px 11px; border-bottom: 1px solid var(--border);
+  }
+  .idx { color: var(--faint); font-variant-numeric: tabular-nums; font-size: 12px; min-width: 22px; }
+  .clip { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: var(--muted); }
+  .badge {
+    font-size: 10.5px; font-weight: 650; letter-spacing: .03em; text-transform: uppercase;
+    padding: 2px 7px; border-radius: 999px; border: 1px solid var(--border-strong); color: var(--muted);
+    white-space: nowrap;
+  }
+  .badge.set-0 { color: var(--set-a); border-color: color-mix(in srgb, var(--set-a) 45%, transparent); }
+  .badge.set-1 { color: var(--set-b); border-color: color-mix(in srgb, var(--set-b) 45%, transparent); }
+  .badge.yes { color: var(--good); background: var(--good-soft); border-color: color-mix(in srgb, var(--good) 35%, transparent); }
+  .badge.no { color: var(--bad); background: var(--bad-soft); border-color: color-mix(in srgb, var(--bad) 35%, transparent); }
+  .badge.na { color: var(--faint); }
+  .media { display: grid; grid-template-columns: 1.55fr 1fr; gap: 1px; background: var(--border); cursor: zoom-in; }
+  .media figure { margin: 0; background: var(--panel); position: relative; }
+  .media img { display: block; width: 100%; height: 100%; object-fit: contain; background: #0b0d11; aspect-ratio: 16/9; }
+  .media figure.plot img { background: var(--panel); aspect-ratio: 4/3; }
+  .media figcaption {
+    position: absolute; left: 6px; bottom: 6px; font-size: 10px; letter-spacing: .04em;
+    text-transform: uppercase; color: #fff; background: rgba(0, 0, 0, .55);
+    padding: 1px 6px; border-radius: 4px;
+  }
+  .media figure.plot figcaption { color: var(--muted); background: color-mix(in srgb, var(--panel) 80%, transparent); }
+  .missing {
+    display: flex; align-items: center; justify-content: center; height: 100%;
+    min-height: 120px; color: var(--faint); font-size: 12px;
+  }
+  .card-body { padding: 10px 11px 12px; display: flex; flex-direction: column; gap: 9px; }
+  .cot {
+    font-size: 13px; line-height: 1.45; border-left: 3px solid var(--accent);
+    padding-left: 9px; color: var(--text);
+  }
+  .cot .label { font-size: 10px; letter-spacing: .07em; text-transform: uppercase; color: var(--faint); display: block; }
+  .tags { display: flex; flex-wrap: wrap; gap: 4px; }
+  .tag {
+    font-size: 11px; padding: 1px 7px; border-radius: 5px;
+    background: var(--bg); border: 1px solid var(--border); color: var(--muted);
+    cursor: pointer;
+  }
+  .tag:hover { border-color: var(--accent); color: var(--accent); }
+  .tag.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+  .tag .k { color: var(--faint); }
+  .kin {
+    display: flex; flex-wrap: wrap; gap: 3px 14px; font-size: 11.5px; color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .kin b { font-weight: 600; color: var(--text); }
+  .just { font-size: 12px; color: var(--muted); }
+  .just p { margin: 3px 0; }
+  .just .flag { font-weight: 650; }
+  .just .flag.no { color: var(--bad); }
+  .just .flag.yes { color: var(--good); }
+  .card-foot { display: flex; gap: 8px; align-items: center; padding: 0 11px 11px; }
+  .link-btn {
+    font-size: 12px; border: 1px solid var(--border-strong); border-radius: 6px;
+    padding: 3px 9px; background: var(--panel); color: var(--muted); cursor: pointer; font-family: inherit;
+  }
+  .link-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* ---------- modal ---------- */
+  .overlay {
+    position: fixed; inset: 0; background: rgba(8, 11, 16, .72); z-index: 50;
+    display: none; padding: 22px; overflow: auto;
+  }
+  .overlay.open { display: block; }
+  .modal {
+    background: var(--panel); border-radius: 12px; max-width: 1280px; margin: 0 auto;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, .4); overflow: hidden;
+  }
+  .modal-head {
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    padding: 11px 14px; border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; background: var(--panel); z-index: 2;
+  }
+  .modal-body { padding: 14px; display: flex; flex-direction: column; gap: 16px; }
+  .modal-media { display: grid; gap: 12px; grid-template-columns: 1.4fr 1fr; align-items: start; }
+  .modal-media img, .modal-media video { width: 100%; border-radius: 8px; display: block; background: #0b0d11; }
+  .modal-media .stack { display: flex; flex-direction: column; gap: 12px; }
+  .cap { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--faint); margin: 0 0 4px; }
+  .grid2 { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  table.kv { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.kv th, table.kv td { text-align: left; padding: 3px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.kv th { color: var(--muted); font-weight: 500; width: 46%; }
+  table.kv td { font-variant-numeric: tabular-nums; }
+  .distbar { display: flex; height: 9px; border-radius: 3px; overflow: hidden; margin: 4px 0 2px; }
+  .distbar span { height: 100%; }
+  .distlegend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11.5px; color: var(--muted); }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+  .paths { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--faint); word-break: break-all; }
+  .traj-svg { width: 100%; height: auto; background: var(--bg); border-radius: 8px; border: 1px solid var(--border); }
+  .no-results { padding: 40px; text-align: center; color: var(--muted); }
+  .filter-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 12px; }
+  .filter-bar .lead { font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-row">
+    <div>
+      <h1>__PAGE_TITLE__</h1>
+      <div class="subtitle" id="subtitle"></div>
+    </div>
+    <div class="spacer"></div>
+    <div class="seg" id="set-seg"></div>
+    <input class="control" id="search" type="search" placeholder="Search CoT, clip id, tags…">
+    <select class="control" id="sort">
+      <option value="set">Sort: set order</option>
+      <option value="clip">Sort: clip id</option>
+      <option value="speed">Sort: peak speed</option>
+      <option value="turn">Sort: heading change</option>
+      <option value="answer">Sort: answers first</option>
+    </select>
+    <button class="control" id="layout-toggle">Wide cards</button>
+    <button class="control" id="reset">Reset filters</button>
+  </div>
+</header>
+<main>
+  <details class="panel" id="diversity" open>
+    <summary>Coverage &amp; diversity <span class="hint" id="diversity-hint"></span></summary>
+    <div class="panel-body" id="facets"></div>
+  </details>
+  <div class="filter-bar" id="active-filters"></div>
+  <div class="cards" id="cards"></div>
+</main>
+<div class="overlay" id="overlay"><div class="modal" id="modal"></div></div>
+
+<script id="viewer-data" type="application/json">"__VIEWER_DATA__"</script>
+<script>
+(function () {
+  "use strict";
+  const DATA = JSON.parse(document.getElementById("viewer-data").textContent);
+  const RECORDS = DATA.records;
+  const SETS = DATA.sources.map(s => s.label);
+  const SET_COLORS = ["var(--set-a)", "var(--set-b)", "#0f9488", "#a3468f", "#5f6b7a"];
+  const GROUP_LABEL = {};
+  DATA.facet_groups.forEach(section => section.groups.forEach(g => { GROUP_LABEL[g.key] = g.label; }));
+
+  const CHIP_LIMIT = 9;
+  const state = {
+    sets: new Set(SETS),
+    filters: {},
+    search: "",
+    sort: "set",
+    wide: false,
+    expanded: new Set(),
+  };
+
+  const el = id => document.getElementById(id);
+  const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const num = (v, digits) => (typeof v === "number" && isFinite(v)) ? v.toFixed(digits == null ? 1 : digits) : "–";
+  const pretty = s => String(s).replace(/_/g, " ");
+  const setColor = label => SET_COLORS[Math.max(0, SETS.indexOf(label)) % SET_COLORS.length];
+
+  function searchText(record) {
+    if (record._search) return record._search;
+    const parts = [record.clip_id, record.cot, record.set, record.scene_uuid || ""];
+    Object.values(record.facets).forEach(values => parts.push(values.join(" ")));
+    (record.answers.consistency_justification || []).forEach(t => parts.push(t));
+    (record.answers.reliability_justification || []).forEach(t => parts.push(t));
+    (record.answers.safety_justification || []).forEach(t => parts.push(t));
+    (record.answers.note || []).forEach(t => parts.push(t));
+    record._search = parts.join(" ").toLowerCase();
+    return record._search;
+  }
+
+  /** Records passing every active filter, optionally ignoring one facet group
+      so that group's own chip counts stay meaningful while it is filtered. */
+  function selected(skipGroup) {
+    return RECORDS.filter(record => {
+      if (!state.sets.has(record.set)) return false;
+      if (state.search && searchText(record).indexOf(state.search) === -1) return false;
+      for (const key of Object.keys(state.filters)) {
+        if (key === skipGroup) continue;
+        const wanted = state.filters[key];
+        if (!wanted || wanted.size === 0) continue;
+        const values = record.facets[key] || [];
+        if (!values.some(value => wanted.has(value))) return false;
+      }
+      return true;
+    });
+  }
+
+  function counts(records, key) {
+    const map = new Map();
+    records.forEach(record => {
+      (record.facets[key] || []).forEach(value => {
+        if (!map.has(value)) map.set(value, { total: 0, bySet: {} });
+        const bucket = map.get(value);
+        bucket.total += 1;
+        bucket.bySet[record.set] = (bucket.bySet[record.set] || 0) + 1;
+      });
+    });
+    return [...map.entries()].sort((a, b) => b[1].total - a[1].total || a[0].localeCompare(b[0]));
+  }
+
+  function evenness(entries) {
+    const totals = entries.map(e => e[1].total).filter(n => n > 0);
+    const sum = totals.reduce((a, b) => a + b, 0);
+    if (!sum || totals.length < 2) return totals.length ? 1 : null;
+    const h = -totals.reduce((acc, n) => acc + (n / sum) * Math.log(n / sum), 0);
+    return h / Math.log(totals.length);
+  }
+
+  function toggleFilter(key, value) {
+    if (!state.filters[key]) state.filters[key] = new Set();
+    const bucket = state.filters[key];
+    if (bucket.has(value)) bucket.delete(value); else bucket.add(value);
+    if (bucket.size === 0) delete state.filters[key];
+    render();
+  }
+
+  function renderFacets() {
+    const host = el("facets");
+    const visible = selected(null);
+    host.innerHTML = DATA.facet_groups.map(section => {
+      const rendered = section.groups.map(group => {
+        const scope = selected(group.key);
+        const entries = counts(scope, group.key);
+        if (!entries.length) return "";
+        const max = entries.reduce((m, e) => Math.max(m, e[1].total), 0) || 1;
+        const even = evenness(entries);
+        const expanded = state.expanded.has(group.key);
+        const shown = expanded ? entries : entries.slice(0, CHIP_LIMIT);
+        const chips = shown.map(([value, bucket]) => {
+          const on = state.filters[group.key] && state.filters[group.key].has(value);
+          const segments = SETS.filter(s => bucket.bySet[s]).map(s =>
+            `<span style="width:${(bucket.bySet[s] / max) * 100}%;background:${setColor(s)}"></span>`).join("");
+          const title = SETS.filter(s => bucket.bySet[s]).map(s => `${s}: ${bucket.bySet[s]}`).join(" · ");
+          return `<button class="chip${on ? " on" : ""}" data-group="${esc(group.key)}" data-value="${esc(value)}" title="${esc(title)}">
+              <span class="bar">${segments}</span>
+              <span class="name">${esc(pretty(value))}</span>
+              <span class="n">${bucket.total}</span>
+            </button>`;
+        }).join("");
+        const stat = `${entries.length} value${entries.length === 1 ? "" : "s"}`
+          + (entries.length > 1 ? ` · evenness ${even.toFixed(2)}` : "");
+        const more = entries.length > CHIP_LIMIT
+          ? `<button class="more-btn" data-more="${esc(group.key)}">${
+              expanded ? "show fewer" : `show all ${entries.length}`}</button>`
+          : "";
+        return `<div class="facet">
+            <h3>${esc(group.label)}<span class="stat">${stat}</span></h3>
+            <div class="chips">${chips}${more}</div>
+          </div>`;
+      }).filter(Boolean);
+      if (!rendered.length) return "";
+      return `<section class="facet-section"><h2>${esc(section.section)}</h2>
+        <div class="facet-grid">${rendered.join("")}</div></section>`;
+    }).join("");
+    if (!host.innerHTML) {
+      host.innerHTML = '<div class="empty-note">No labelled attributes for this selection.</div>';
+    }
+
+    const perSet = SETS.map(s => `${s} ${visible.filter(r => r.set === s).length}`).join(" · ");
+    el("diversity-hint").textContent = `${visible.length} clips shown (${perSet}); bar colour = example set, evenness 1.00 = perfectly even split`;
+    host.querySelectorAll(".chip").forEach(chip => {
+      chip.addEventListener("click", () => toggleFilter(chip.dataset.group, chip.dataset.value));
+    });
+    host.querySelectorAll(".more-btn").forEach(button => {
+      button.addEventListener("click", () => {
+        const key = button.dataset.more;
+        if (state.expanded.has(key)) state.expanded.delete(key); else state.expanded.add(key);
+        renderFacets();
+      });
+    });
+  }
+
+  function renderActiveFilters() {
+    const host = el("active-filters");
+    const keys = Object.keys(state.filters);
+    if (!keys.length && !state.search) { host.innerHTML = ""; return; }
+    const chips = [];
+    if (state.search) chips.push(`<span class="tag">search: ${esc(state.search)}</span>`);
+    keys.forEach(key => {
+      state.filters[key].forEach(value => {
+        chips.push(`<button class="tag on" data-group="${esc(key)}" data-value="${esc(value)}">
+          ${esc(GROUP_LABEL[key] || key)}: ${esc(pretty(value))} ✕</button>`);
+      });
+    });
+    host.innerHTML = `<span class="lead">Filters:</span>${chips.join("")}`;
+    host.querySelectorAll("button.tag").forEach(tag => {
+      tag.addEventListener("click", () => toggleFilter(tag.dataset.group, tag.dataset.value));
+    });
+  }
+
+  function answerBadge(label, value) {
+    const cls = value === true ? "yes" : value === false ? "no" : "na";
+    const text = value === true ? "yes" : value === false ? "no" : "—";
+    return `<span class="badge ${cls}">${esc(label)}: ${text}</span>`;
+  }
+
+  function reliabilityBadge(record) {
+    const flags = record.answers.reliability_flags || {};
+    const keys = Object.keys(flags);
+    if (!keys.length) return `<span class="badge na">reliability: —</span>`;
+    const failed = keys.filter(k => flags[k] === false);
+    if (failed.length) {
+      return `<span class="badge no">CoT ${failed.map(k => "not " + pretty(k)).join(", ")}</span>`;
+    }
+    return keys.some(k => flags[k] === true)
+      ? `<span class="badge yes">CoT reliable</span>`
+      : `<span class="badge na">reliability: —</span>`;
+  }
+
+  function tagList(record) {
+    const items = [];
+    const push = (key, value) => { if (value) items.push([key, value]); };
+    push("causal_factor", record.decision.causal_factor);
+    push("longitudinal_decision", record.decision.longitudinal);
+    push("lateral_decision", record.decision.lateral);
+    (record.decision.component_tags || []).forEach(t => push("component_tags", t));
+    push("meta_longitudinal", (record.meta_actions.dominant || {}).longitudinal);
+    push("meta_lateral", (record.meta_actions.dominant || {}).lateral);
+    ["behavior", "layout", "road_types", "traffic_density", "weather", "lighting"].forEach(key => {
+      (record.facets[key] || []).forEach(value => push(key, value));
+    });
+    (record.facets.vrus || []).forEach(value => push("vrus", value));
+    // Attributes supplied by a --attributes CSV, so custom sets get chips too.
+    Object.keys(record.facets).filter(key => key.startsWith("attr:")).forEach(key => {
+      (record.facets[key] || []).forEach(value => push(key, value));
+    });
+    return items.map(([key, value]) => {
+      const on = state.filters[key] && state.filters[key].has(value);
+      return `<button class="tag${on ? " on" : ""}" data-group="${esc(key)}" data-value="${esc(value)}"
+        title="${esc(GROUP_LABEL[key] || key)}">${esc(pretty(value))}</button>`;
+    }).join("");
+  }
+
+  function kinematicsLine(record) {
+    const k = record.kinematics || {};
+    return `<div class="kin">
+      <span>horizon <b>${num(k.time_horizon_s)} s</b></span>
+      <span>distance <b>${num(k.total_distance_2d_m)} m</b></span>
+      <span>peak <b>${num(k.max_speed_kph)} kph</b></span>
+      <span>mean <b>${num(k.mean_speed_mps)} m/s</b></span>
+      <span>heading <b>${num(k.heading_change_deg)}°</b></span>
+      <span>lateral <b>${num(k.final_lateral_offset_m)} m</b></span>
+      <span>max |decel| <b>${num(k.max_abs_longitudinal_acceleration_mps2)} m/s²</b></span>
+    </div>`;
+  }
+
+  function justifications(record) {
+    const a = record.answers;
+    const rows = [];
+    (a.consistency_justification || []).forEach(text =>
+      rows.push(`<p><span class="flag ${a.consistency === false ? "no" : "yes"}">Consistency.</span> ${esc(text)}</p>`));
+    (a.reliability_justification || []).forEach(text =>
+      rows.push(`<p><span class="flag no">Reliability.</span> ${esc(text)}</p>`));
+    (a.safety_justification || []).forEach(text =>
+      rows.push(`<p><span class="flag ${a.trajectory_safe === false ? "no" : "yes"}">Trajectory safety.</span> ${esc(text)}</p>`));
+    (a.note || []).forEach(text => rows.push(`<p><span class="flag">Note.</span> ${esc(text)}</p>`));
+    return rows.length ? `<div class="just">${rows.join("")}</div>` : "";
+  }
+
+  function mediaBlock(record) {
+    const frame = record.assets.frame
+      ? `<img loading="lazy" src="${esc(record.assets.frame)}" alt="front wide camera frame">`
+      : `<div class="missing">frame not on disk</div>`;
+    const plot = record.assets.trajectory
+      ? `<img loading="lazy" src="${esc(record.assets.trajectory)}" alt="planned trajectory plot">`
+      : `<div class="missing">trajectory plot not on disk</div>`;
+    return `<div class="media" data-open="1">
+      <figure>${frame}<figcaption>frame t₀</figcaption></figure>
+      <figure class="plot">${plot}<figcaption>trajectory</figcaption></figure>
+    </div>`;
+  }
+
+  function renderCards(records) {
+    const host = el("cards");
+    host.className = "cards" + (state.wide ? " wide" : "");
+    if (!records.length) {
+      host.innerHTML = `<div class="no-results">No clips match the current filters.</div>`;
+      return;
+    }
+    host.innerHTML = records.map((record, i) => {
+      const setIndex = Math.max(0, SETS.indexOf(record.set));
+      return `<article class="card" data-key="${esc(record._key)}">
+        <div class="card-head">
+          <span class="idx">${i + 1}</span>
+          <span class="badge set-${setIndex}">${esc(record.set)}</span>
+          <span class="clip">${esc(record.clip_id)}</span>
+          <span class="spacer"></span>
+          ${answerBadge("consistent", record.answers.consistency)}
+          ${reliabilityBadge(record)}
+          ${answerBadge("traj safe", record.answers.trajectory_safe)}
+        </div>
+        ${mediaBlock(record)}
+        <div class="card-body">
+          <div class="cot"><span class="label">Chain of thought</span>${esc(record.cot || "—")}</div>
+          <div class="tags">${tagList(record)}</div>
+          ${kinematicsLine(record)}
+          ${justifications(record)}
+        </div>
+        <div class="card-foot">
+          <button class="link-btn" data-open="1">Details${record.assets.video ? " &amp; video" : ""}</button>
+          ${record.assets.video ? "" : '<span class="clip">no rollout video on disk</span>'}
+        </div>
+      </article>`;
+    }).join("");
+
+    host.querySelectorAll(".card").forEach(card => {
+      const record = RECORDS.find(r => r._key === card.dataset.key);
+      card.querySelectorAll("[data-open]").forEach(node =>
+        node.addEventListener("click", () => openModal(record)));
+      card.querySelectorAll(".tag").forEach(tag =>
+        tag.addEventListener("click", event => {
+          event.stopPropagation();
+          toggleFilter(tag.dataset.group, tag.dataset.value);
+        }));
+    });
+  }
+
+  /* ---------- detail modal ---------- */
+
+  function kvTable(rows) {
+    const body = rows.filter(row => row[1] !== "" && row[1] != null)
+      .map(row => `<tr><th>${esc(row[0])}</th><td>${row[2] ? row[1] : esc(row[1])}</td></tr>`).join("");
+    return `<table class="kv">${body}</table>`;
+  }
+
+  function distribution(title, dist) {
+    const entries = Object.entries(dist || {}).sort((a, b) => b[1] - a[1]);
+    if (!entries.length) return "";
+    const total = entries.reduce((a, b) => a + b[1], 0);
+    const palette = ["#3b82f6", "#f59e0b", "#10b981", "#ef4444", "#8b5cf6", "#14b8a6", "#e879f9"];
+    const bar = entries.map(([name, n], i) =>
+      `<span style="width:${(n / total) * 100}%;background:${palette[i % palette.length]}" title="${esc(pretty(name))}: ${n}"></span>`).join("");
+    const legend = entries.map(([name, n], i) =>
+      `<span><i class="dot" style="background:${palette[i % palette.length]}"></i>${esc(pretty(name))} ${n}</span>`).join("");
+    return `<div><p class="cap">${esc(title)}</p><div class="distbar">${bar}</div>
+      <div class="distlegend">${legend}</div></div>`;
+  }
+
+  /** Bird's-eye trajectory in the ego rig frame: forward up, left to the left,
+      coloured by segment speed so acceleration profile is visible. The speed
+      carried on waypoint i-1 is the speed of the segment leaving it, so it is
+      this segment's own speed rather than the next one's. */
+  function trajectorySvg(points) {
+    if (!points || points.length < 2) return "";
+    const W = 460, H = 340, pad = 26;
+    const xs = points.map(p => -p[1]);
+    const ys = points.map(p => p[0]);
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    const spanX = Math.max(maxX - minX, 6), spanY = Math.max(maxY - minY, 6);
+    const scale = Math.min((W - 2 * pad) / spanX, (H - 2 * pad) / spanY);
+    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+    const px = x => W / 2 + (x - cx) * scale;
+    const py = y => H / 2 - (y - cy) * scale;
+    const speeds = points.map(p => p[2]).filter(v => typeof v === "number");
+    const lo = speeds.length ? Math.min(...speeds) : 0;
+    const hi = speeds.length ? Math.max(...speeds) : 1;
+    const ramp = ["#2c7bb6", "#66c2a5", "#ffd54f", "#fd8d3c", "#d7191c"];
+    const colorFor = v => {
+      if (typeof v !== "number" || hi <= lo) return "#7f8c9b";
+      return ramp[Math.min(ramp.length - 1, Math.floor(((v - lo) / (hi - lo)) * ramp.length))];
+    };
+    let segs = "";
+    for (let i = 1; i < points.length; i++) {
+      segs += `<line x1="${px(xs[i - 1]).toFixed(1)}" y1="${py(ys[i - 1]).toFixed(1)}"
+        x2="${px(xs[i]).toFixed(1)}" y2="${py(ys[i]).toFixed(1)}"
+        stroke="${colorFor(points[i - 1][2])}" stroke-width="4" stroke-linecap="round"/>`;
+    }
+    const diag = Math.SQRT1_2;
+    const rings = [10, 20, 30, 40].filter(r => r * scale < Math.max(W, H))
+      .map(r => `<circle cx="${px(xs[0])}" cy="${py(ys[0])}" r="${(r * scale).toFixed(1)}"
+        fill="none" stroke="var(--border)" stroke-dasharray="3 4"/>
+        <text x="${(px(xs[0]) + r * scale * diag + 2).toFixed(1)}"
+              y="${(py(ys[0]) - r * scale * diag).toFixed(1)}"
+              font-size="9" fill="var(--faint)">${r} m</text>`).join("");
+    return `<div><p class="cap">Trajectory in ego frame — colour = speed (${num(lo)}–${num(hi)} kph)</p>
+      <svg class="traj-svg" viewBox="0 0 ${W} ${H}" role="img">
+        ${rings}${segs}
+        <circle cx="${px(xs[0])}" cy="${py(ys[0])}" r="5" fill="var(--text)"/>
+        <circle cx="${px(xs[xs.length - 1])}" cy="${py(ys[ys.length - 1])}" r="4" fill="none" stroke="var(--text)" stroke-width="2"/>
+      </svg></div>`;
+  }
+
+  function openModal(record) {
+    const k = record.kinematics || {};
+    const a = record.answers;
+    const flags = a.reliability_flags || {};
+    const setIndex = Math.max(0, SETS.indexOf(record.set));
+    const video = record.assets.video
+      ? `<div><p class="cap">Rollout video</p><video controls preload="metadata" src="${esc(record.assets.video)}"></video></div>`
+      : `<div><p class="cap">Rollout video</p><div class="missing">not on disk</div></div>`;
+    el("modal").innerHTML = `
+      <div class="modal-head">
+        <span class="badge set-${setIndex}">${esc(record.set)}</span>
+        <span class="clip">${esc(record.clip_id)}</span>
+        <span class="spacer"></span>
+        ${answerBadge("consistent", a.consistency)}
+        ${reliabilityBadge(record)}
+        ${answerBadge("traj safe", a.trajectory_safe)}
+        <button class="link-btn" id="modal-prev">← prev</button>
+        <button class="link-btn" id="modal-next">next →</button>
+        <button class="link-btn" id="modal-close">Close ✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="cot"><span class="label">Chain of thought</span>${esc(record.cot || "—")}</div>
+        ${justifications(record)}
+        <div class="modal-media">
+          <div class="stack">
+            <div><p class="cap">Front wide camera at t₀</p>
+              ${record.assets.frame ? `<img src="${esc(record.assets.frame)}" alt="frame">` : '<div class="missing">frame not on disk</div>'}</div>
+            ${video}
+          </div>
+          <div class="stack">
+            <div><p class="cap">Trajectory plot</p>
+              ${record.assets.trajectory ? `<img src="${esc(record.assets.trajectory)}" alt="trajectory plot">` : '<div class="missing">plot not on disk</div>'}</div>
+            ${trajectorySvg(record.points)}
+          </div>
+        </div>
+        <div class="grid2">
+          <div>
+            <p class="cap">Scene attributes (NuRec)</p>
+            ${kvTable([
+              ["Behavior", (record.facets.behavior || []).map(pretty).join(", ")],
+              ["Layout", (record.facets.layout || []).map(pretty).join(", ")],
+              ["Road type", (record.facets.road_types || []).map(pretty).join(", ")],
+              ["Traffic density", (record.facets.traffic_density || []).map(pretty).join(", ")],
+              ["Lighting", (record.facets.lighting || []).map(pretty).join(", ")],
+              ["Weather", (record.facets.weather || []).map(pretty).join(", ")],
+              ["Surface", (record.facets.surface_conditions || []).map(pretty).join(", ")],
+              ["VRUs", (record.facets.vrus || []).map(pretty).join(", ")],
+              ["Scene uuid", record.scene_uuid || ""],
+            ])}
+          </div>
+          <div>
+            <p class="cap">CoT decision label (Alpamayo-R1)</p>
+            ${kvTable([
+              ["Longitudinal decision", pretty(record.decision.longitudinal || "–")],
+              ["Lateral decision", pretty(record.decision.lateral || "–")],
+              ["Primary causal factor", pretty(record.decision.causal_factor || "–")],
+              ["Critical components", (record.decision.component_categories || []).map(pretty).join(", ")],
+              ["Critical component tags", (record.decision.component_tags || []).map(pretty).join(", ")],
+              ["Meta-action hint", [record.decision.hint_longitudinal, record.decision.hint_lateral]
+                .filter(Boolean).map(pretty).join(" / ")],
+            ])}
+          </div>
+          <div>
+            <p class="cap">Trajectory kinematics</p>
+            ${kvTable([
+              ["Horizon / waypoints", `${num(k.time_horizon_s)} s · ${k.waypoint_count == null ? "–" : k.waypoint_count}`],
+              ["Distance travelled", `${num(k.total_distance_2d_m)} m`],
+              ["Final offset (fwd / lat)", `${num(k.final_forward_offset_m)} m / ${num(k.final_lateral_offset_m)} m`],
+              ["Speed min / mean / max", `${num(k.min_speed_mps)} / ${num(k.mean_speed_mps)} / ${num(k.max_speed_mps)} m/s`],
+              ["Peak speed", `${num(k.max_speed_kph)} kph`],
+              ["Longitudinal accel min / |max|", `${num(k.min_longitudinal_acceleration_mps2, 2)} / ${num(k.max_abs_longitudinal_acceleration_mps2, 2)} m/s²`],
+              ["Max |lateral accel| / |jerk|", `${num(k.max_abs_lateral_acceleration_mps2, 2)} m/s² · ${num(k.max_abs_jerk_mps3, 2)} m/s³`],
+              ["Heading change", `${num(k.heading_change_deg)}°`],
+              ["Max |curvature|", `${num(k.max_abs_curvature_1pm, 3)} 1/m`],
+              ["Status", pretty(k.trajectory_status || "–")],
+            ])}
+          </div>
+          <div>
+            <p class="cap">Meta-actions across ${record.meta_actions.transition_count == null ? "?" : record.meta_actions.transition_count} transitions</p>
+            ${distribution("Longitudinal segments", record.meta_actions.longitudinal_distribution)}
+            ${distribution("Lateral segments", record.meta_actions.lateral_distribution)}
+          </div>
+          <div>
+            <p class="cap">Answers</p>
+            ${kvTable([
+              ["CoT–action consistency", a.consistency == null ? "unanswered" : String(a.consistency)],
+              ["Reliability flags", Object.keys(flags).length
+                ? Object.keys(flags).map(key => `${pretty(key)}: ${flags[key] == null ? "–" : flags[key]}`).join(", ")
+                : "unanswered"],
+              ["Planned trajectory safe", a.trajectory_safe == null ? "unanswered" : String(a.trajectory_safe)],
+              ["Checkpoint", record.checkpoint || "–"],
+            ])}
+          </div>
+          <div>
+            <p class="cap">Source paths</p>
+            <div class="paths">
+              ${esc(record.assets.scene_dir || "scene folder missing")}<br>
+              ${esc(record.scene_folder || "")}
+            </div>
+          </div>
+        </div>
+      </div>`;
+    el("overlay").classList.add("open");
+    document.body.style.overflow = "hidden";
+    setHash(record.clip_id ? "#clip=" + encodeURIComponent(record.clip_id) : "");
+    el("modal-close").addEventListener("click", closeModal);
+    el("modal-prev").addEventListener("click", () => step(record, -1));
+    el("modal-next").addEventListener("click", () => step(record, 1));
+    el("overlay").scrollTop = 0;
+  }
+
+  function step(record, delta) {
+    const list = currentList();
+    const index = list.findIndex(r => r._key === record._key);
+    if (index === -1) return;
+    const next = list[(index + delta + list.length) % list.length];
+    openModal(next);
+  }
+
+  function closeModal() {
+    el("overlay").classList.remove("open");
+    el("modal").innerHTML = "";
+    document.body.style.overflow = "";
+    setHash("");
+  }
+
+  function setHash(hash) {
+    try {
+      history.replaceState(null, "", hash || location.pathname + location.search);
+    } catch (error) {
+      /* file:// origins can reject replaceState; the fragment is optional. */
+    }
+  }
+
+  /** Open the clip named by a #clip=<clip_id> fragment, so a card is linkable. */
+  function openFromHash() {
+    const match = /[#&]clip=([^&]+)/.exec(location.hash || "");
+    if (!match) return;
+    const clipId = decodeURIComponent(match[1]);
+    const record = RECORDS.find(r => r.clip_id === clipId);
+    if (record) openModal(record);
+  }
+
+  /* ---------- wiring ---------- */
+
+  function currentList() {
+    const records = selected(null).slice();
+    const speed = r => (r.kinematics || {}).max_speed_kph;
+    const turn = r => Math.abs((r.kinematics || {}).heading_change_deg || 0);
+    const answered = r => (r.answers.consistency == null ? 1 : 0);
+    const sorters = {
+      set: (a, b) => SETS.indexOf(a.set) - SETS.indexOf(b.set) || a.order - b.order,
+      clip: (a, b) => a.clip_id.localeCompare(b.clip_id),
+      speed: (a, b) => (speed(b) || 0) - (speed(a) || 0),
+      turn: (a, b) => turn(b) - turn(a),
+      answer: (a, b) => answered(a) - answered(b) || SETS.indexOf(a.set) - SETS.indexOf(b.set) || a.order - b.order,
+    };
+    return records.sort(sorters[state.sort] || sorters.set);
+  }
+
+  function renderSetButtons() {
+    el("set-seg").innerHTML = DATA.sources.map(source =>
+      `<button data-set="${esc(source.label)}" class="${state.sets.has(source.label) ? "on" : ""}">
+        ${esc(source.label)} <span style="opacity:.7">${source.count}</span></button>`).join("");
+    el("set-seg").querySelectorAll("button").forEach(button => {
+      button.addEventListener("click", () => {
+        const label = button.dataset.set;
+        if (state.sets.has(label)) state.sets.delete(label); else state.sets.add(label);
+        if (state.sets.size === 0) SETS.forEach(s => state.sets.add(s));
+        render();
+      });
+    });
+  }
+
+  function render() {
+    renderSetButtons();
+    renderFacets();
+    renderActiveFilters();
+    renderCards(currentList());
+  }
+
+  RECORDS.forEach((record, i) => { record._key = record.set + "#" + i; });
+  el("subtitle").textContent = DATA.sources
+    .map(s => `${s.label}: ${s.count} clips — ${s.path}`).join("   ·   ");
+  el("search").addEventListener("input", event => {
+    state.search = event.target.value.trim().toLowerCase();
+    render();
+  });
+  el("sort").addEventListener("change", event => { state.sort = event.target.value; render(); });
+  el("layout-toggle").addEventListener("click", event => {
+    state.wide = !state.wide;
+    event.target.textContent = state.wide ? "Grid cards" : "Wide cards";
+    render();
+  });
+  el("reset").addEventListener("click", () => {
+    state.filters = {};
+    state.search = "";
+    state.sets = new Set(SETS);
+    el("search").value = "";
+    render();
+  });
+  el("overlay").addEventListener("click", event => {
+    if (event.target === el("overlay")) closeModal();
+  });
+  document.addEventListener("keydown", event => {
+    if (!el("overlay").classList.contains("open")) return;
+    if (event.key === "Escape") closeModal();
+    if (event.key === "ArrowRight") el("modal-next").click();
+    if (event.key === "ArrowLeft") el("modal-prev").click();
+  });
+
+  render();
+  openFromHash();
+  window.addEventListener("hashchange", openFromHash);
+})();
+</script>
+</body>
+</html>

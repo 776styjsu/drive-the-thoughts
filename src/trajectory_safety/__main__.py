@@ -15,7 +15,7 @@ Usage (from repo root)::
 
     uv run python -m trajectory_safety \\
         --benchmark_json data/benchmark/benchmark.json \\
-        --monitor_json data/results/llm_matrix/gpt.f_llm_map_graph.run_001.json \\
+        --monitor_json data/results/llm_matrix/opus.f_llm_map_graph.run_001.json \\
         --output downstream_safety.json \\
         --csv downstream_safety.csv
 

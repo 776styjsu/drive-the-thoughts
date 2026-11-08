@@ -4,13 +4,14 @@
 
 """Run benchmark CoT judge matrix across providers and feature variants.
 
-Runs Qwen (local vLLM), Kimi (Moonshot API), and GPT (OpenAI API) for:
+Runs Qwen (local vLLM), Kimi (Moonshot API), GPT (OpenAI API), and DeepSeek
+(DeepSeek API) for:
 - llm: default prompt.py with ego-frame trajectory features.
 - f_llm_map_graph: prompt center_of_lane with dual/map_graph features.
 
-API keys come from --kimi-api-key/--gpt-api-key/--qwen-api-key, falling back
-to each provider's environment variable (also loaded from .env by
-cot_analysis). Keys given as arguments reach the runs through the subprocess
+API keys come from --kimi-api-key/--gpt-api-key/--qwen-api-key/
+--deepseek-api-key, falling back to each provider's environment variable (also
+loaded from .env by cot_analysis). Keys given as arguments reach the runs through the subprocess
 environment, never through the command line, so they do not appear in logs or
 the manifest.
 
@@ -38,6 +39,7 @@ PROVIDERS: tuple[tuple[str, str], ...] = (
     ("qwen", "qwen35_4b_fp8"),
     ("kimi", "kimi"),
     ("gpt", "openai"),
+    ("deepseek", "deepseek"),
 )
 
 UV_RUN_LLM = ("uv", "run", "--extra", "llm")
@@ -59,7 +61,7 @@ def parse_args() -> argparse.Namespace:
     repo_root = _repo_root()
     parser = argparse.ArgumentParser(
         description=(
-            "Run qwen/kimi/gpt CoT judge experiments for plain LLM and "
+            "Run qwen/kimi/gpt/deepseek CoT judge experiments for plain LLM and "
             "feature-LLM map_graph variants."
         )
     )
@@ -153,11 +155,52 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--kimi-model",
+        default=None,
+        help=(
+            "Model name override for the kimi provider, e.g. 'Kimi K2.5' on "
+            "a self-hosted OpenAI-compatible gateway. Default: the provider's model."
+        ),
+    )
+    parser.add_argument(
+        "--kimi-base-url",
+        default=None,
+        help=(
+            "OpenAI-compatible base URL override for the kimi provider, e.g. "
+            "https://gateway.example.org/api. Default: MOONSHOT_BASE_URL "
+            "or the provider's base URL."
+        ),
+    )
+    parser.add_argument(
         "--gpt-api-key",
         default=None,
         help=(
             "API key for the gpt provider. Overrides the OPENAI_API_KEY "
             "environment variable."
+        ),
+    )
+    parser.add_argument(
+        "--deepseek-api-key",
+        default=None,
+        help=(
+            "API key for the deepseek provider. Overrides the DEEPSEEK_API_KEY "
+            "environment variable."
+        ),
+    )
+    parser.add_argument(
+        "--deepseek-model",
+        default=None,
+        help=(
+            "Model name override for the deepseek provider, e.g. a dated "
+            "snapshot ID. Default: the provider's model."
+        ),
+    )
+    parser.add_argument(
+        "--deepseek-base-url",
+        default=None,
+        help=(
+            "OpenAI-compatible base URL override for the deepseek provider. "
+            "Default: DEEPSEEK_BASE_URL or the provider's base URL."
         ),
     )
     parser.add_argument(
@@ -173,8 +216,20 @@ def parse_args() -> argparse.Namespace:
         "--providers",
         default="qwen,kimi,gpt",
         help=(
-            "Comma-separated provider labels to run. Choices: qwen,kimi,gpt. "
+            "Comma-separated provider labels to run. Choices: "
+            "qwen,kimi,gpt,deepseek. "
             "Default: %(default)s"
+        ),
+    )
+    parser.add_argument(
+        "--provider-override",
+        action="append",
+        default=[],
+        metavar="LABEL=PROVIDER",
+        help=(
+            "Run a provider label with another judge provider config, e.g. "
+            "kimi=kimi_recommended. Label options such as --kimi-model still "
+            "apply. Repeatable."
         ),
     )
     parser.add_argument(
@@ -281,6 +336,18 @@ def _selected_providers(value: str) -> list[tuple[str, str]]:
     return [(label, known[label]) for label in requested]
 
 
+def _provider_overrides(values: list[str]) -> dict[str, str]:
+    overrides = {}
+    for value in values:
+        label, sep, provider = value.partition("=")
+        if not sep or label not in dict(PROVIDERS):
+            raise ValueError(f"Bad --provider-override (want LABEL=PROVIDER): {value}")
+        if provider not in JUDGE_PROVIDERS:
+            raise ValueError(f"Unknown judge provider in --provider-override: {provider}")
+        overrides[label] = provider
+    return overrides
+
+
 def _variant_args(args: argparse.Namespace, variant: str) -> tuple[str, ...]:
     if variant == "llm":
         return ("--variant", "llm")
@@ -296,8 +363,10 @@ def _build_specs(args: argparse.Namespace) -> list[RunSpec]:
     if unknown:
         raise ValueError(f"Unknown variant(s): {', '.join(unknown)}")
 
+    overrides = _provider_overrides(getattr(args, "provider_override", []))
     specs = []
     for provider_label, provider in _selected_providers(args.providers):
+        provider = overrides.get(provider_label, provider)
         for variant in variants:
             specs.append(
                 RunSpec(
@@ -340,6 +409,14 @@ def _command_for_spec(
     ]
     if not args.include_unreliable_cot:
         cmd.append("--skip-unreliable-cot")
+    # Endpoint/model overrides are not secrets, so they stay on the command
+    # line where the manifest records them.
+    for flag, value in (
+        ("--model", getattr(args, f"{spec.provider_label}_model", None)),
+        ("--base_url", getattr(args, f"{spec.provider_label}_base_url", None)),
+    ):
+        if value:
+            cmd.extend([flag, value])
     cmd.extend(spec.cot_args)
     return cmd
 

@@ -38,9 +38,10 @@ import matplotlib.pyplot as plt
 
 
 MODEL_ROWS = (
-    ("gpt", "GPT-5.5"),
-    ("kimi", "Kimi K2.5"),
-    ("qwen", "Qwen3.5-4B-FP8"),
+    ("qwen", "Qwen3.5-4B"),
+    ("deepseek", "DeepSeek V4.1"),
+    ("opus", "Opus 5.5"),
+    ("jev", "Jev 1.14"),
 )
 
 

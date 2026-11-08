@@ -28,6 +28,10 @@ logger = logging.getLogger(__name__)
 
 # Fixed seed for deterministic decoding where the backend honours it.
 DEFAULT_SEED = 42
+JUDGE_SYSTEM_PROMPT = (
+    "You are an expert evaluator for autonomous vehicle reasoning "
+    "systems. Respond with ONLY a single JSON object, no markdown."
+)
 
 # Moonshot AI's public OpenAI-compatible API (Kimi K2.5). The paper's Kimi
 # runs went through a university gateway that outside users cannot reach; the
@@ -39,6 +43,14 @@ KIMI_MODEL = "kimi-k2.5"
 QWEN3_4B_FP8_MODEL = "Qwen/Qwen3-4B-FP8"
 QWEN35_4B_FP8_MODEL = "RedHatAI/Qwen3.5-4B-FP8-dynamic"
 QWEN3_LOCAL_BASE_URL = "http://localhost:8000/v1"
+# DeepSeek's public OpenAI-compatible API (DeepSeek V4.1 Flash).
+DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+DEEPSEEK_MODEL = "deepseek-v4.1-flash"
+# The same model through OpenRouter, pinned to the 1017 snapshot.
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+OPENROUTER_DEEPSEEK_MODEL = "deepseek/deepseek-v4.1-flash-1017"
+OPENROUTER_CLAUDE_OPUS_MODEL = "anthropic/claude-opus-5.5"
+OPENROUTER_JEV_MODEL = "typesafe/jev-1.14-20261014"
 
 # Selectable model backends. Mirrors cot_analysis/__main__.py PROVIDERS so the
 # online monitor and the offline CLI judge identically when pointed at the same
@@ -66,6 +78,78 @@ PROVIDERS: dict[str, dict] = {
         "temperature": None,
         "supports_images": True,
         "extra_params": {"reasoning_effort": "high"},
+    },
+    "deepseek": {
+        "label": "DeepSeek V4.1 Flash (thinking, high effort)",
+        "model": DEEPSEEK_MODEL,
+        "api_key_env": "DEEPSEEK_API_KEY",
+        "base_url_env": "DEEPSEEK_BASE_URL",
+        "base_url": DEEPSEEK_BASE_URL,
+        # Thinking mode ignores temperature, so we omit it and rely on the
+        # fixed seed, as for GPT-5.5.
+        "temperature": None,
+        "supports_images": False,
+        "extra_params": {
+            "reasoning_effort": "high",
+            "extra_body": {"thinking": {"type": "enabled"}},
+        },
+    },
+    # OpenRouter serves this model from many hosts, several of them fp4/fp8
+    # quantizations, so routing is pinned to DeepSeek's own endpoint with no
+    # fallback. OpenRouter's "reasoning" field turns on thinking mode, which
+    # ignores temperature, so none is sent.
+    "deepseek_openrouter": {
+        "label": "DeepSeek V4.1 Flash 1017 via OpenRouter (thinking, high effort)",
+        "model": OPENROUTER_DEEPSEEK_MODEL,
+        "api_key_env": "OPENROUTER_API_KEY",
+        "base_url_env": "OPENROUTER_BASE_URL",
+        "base_url": OPENROUTER_BASE_URL,
+        "temperature": None,
+        "supports_images": False,
+        "extra_params": {
+            "max_tokens": 32768,
+            "stream_options": {"include_usage": True},
+            "extra_body": {
+                "reasoning": {"effort": "high"},
+                "provider": {"order": ["deepseek"], "allow_fallbacks": False},
+            },
+        },
+    },
+    # Claude Opus 5.5 through OpenRouter, pinned to Anthropic's own endpoint
+    # rather than the Bedrock/Vertex/Azure copies. Thinking cannot be turned off
+    # on this model and it rejects sampling parameters, so only the effort is
+    # set. tools/run_openrouter_batch.py sends the same request through
+    # OpenRouter's Batch API, where "only" is the accepted routing field.
+    "claude_opus_openrouter": {
+        "label": "Claude Opus 5.5 via OpenRouter (adaptive thinking, high effort)",
+        "model": OPENROUTER_CLAUDE_OPUS_MODEL,
+        "api_key_env": "OPENROUTER_API_KEY",
+        "base_url_env": "OPENROUTER_BASE_URL",
+        "base_url": OPENROUTER_BASE_URL,
+        "temperature": None,
+        "supports_images": False,
+        "extra_params": {
+            "max_tokens": 32768,
+            "stream_options": {"include_usage": True},
+            "extra_body": {
+                "reasoning": {"effort": "high"},
+                "provider": {"only": ["anthropic"], "allow_fallbacks": False},
+            },
+        },
+    },
+    # TypeSafe Jev is a decisions model with no chat endpoint: OpenRouter
+    # serves it only at /api/alpha/decisions, which tools/run_jev_decisions.py
+    # calls. It takes no sampling settings or seed. Pinned to the version that
+    # ~typesafe/jev-latest resolved to on 2026-10-31.
+    "jev_openrouter": {
+        "label": "TypeSafe Jev 1.14 via OpenRouter decisions API (Score question)",
+        "model": OPENROUTER_JEV_MODEL,
+        "api_key_env": "OPENROUTER_API_KEY",
+        "base_url_env": "OPENROUTER_BASE_URL",
+        "base_url": OPENROUTER_BASE_URL,
+        "temperature": None,
+        "supports_images": False,
+        "extra_params": {},
     },
     "qwen3_4b_fp8": {
         "label": "Local Qwen3-4B-FP8 via vLLM (non-thinking)",
@@ -101,6 +185,69 @@ PROVIDERS: dict[str, dict] = {
             "presence_penalty": 1.5,
             "extra_body": {
                 "top_k": 20,
+                "chat_template_kwargs": {"enable_thinking": True},
+            },
+        },
+    },
+    # Same model and request as "qwen35_4b_fp8", but with room to reason. The
+    # vLLM server must run with --reasoning-parser qwen3 so JSON mode
+    # constrains only the answer after the reasoning; without it the
+    # qwen35_4b_fp8 runs emitted JSON from the first token and no reasoning.
+    "qwen35_4b_fp8_thinking": {
+        "label": "Local Qwen3.5-4B-FP8 via vLLM (thinking)",
+        "model": QWEN35_4B_FP8_MODEL,
+        "api_key_env": "QWEN35_API_KEY",
+        "base_url_env": "QWEN35_BASE_URL",
+        "base_url": QWEN3_LOCAL_BASE_URL,
+        "default_api_key": "EMPTY",
+        "temperature": 0.0,
+        "supports_images": False,
+        "extra_params": {
+            "max_tokens": 16384,
+            "top_p": 0.8,
+            "presence_penalty": 1.5,
+            "extra_body": {
+                "top_k": 20,
+                "chat_template_kwargs": {"enable_thinking": True},
+            },
+        },
+    },
+    # Provider-recommended reasoning configurations. Greedy decoding makes
+    # thinking models loop (Qwen's model cards advise against it), so these
+    # sample with each provider's documented thinking-mode settings and rely
+    # on the fixed seed. Usage is streamed back to record reasoning tokens.
+    "kimi_recommended": {
+        "label": "Moonshot Kimi K2.5 (thinking, recommended sampling)",
+        "model": KIMI_MODEL,
+        "api_key_env": "MOONSHOT_API_KEY",
+        "base_url_env": "MOONSHOT_BASE_URL",
+        "base_url": KIMI_BASE_URL,
+        "temperature": 1.0,
+        "supports_images": True,
+        "extra_params": {
+            "top_p": 0.95,
+            "stream_options": {"include_usage": True},
+        },
+    },
+    # Requires the vLLM server to run with --reasoning-parser qwen3 (see
+    # "qwen35_4b_fp8_thinking").
+    "qwen35_4b_fp8_thinking_recommended": {
+        "label": "Local Qwen3.5-4B-FP8 via vLLM (thinking, recommended sampling)",
+        "model": QWEN35_4B_FP8_MODEL,
+        "api_key_env": "QWEN35_API_KEY",
+        "base_url_env": "QWEN35_BASE_URL",
+        "base_url": QWEN3_LOCAL_BASE_URL,
+        "default_api_key": "EMPTY",
+        "temperature": 1.0,
+        "supports_images": False,
+        "extra_params": {
+            "max_tokens": 32768,
+            "top_p": 0.95,
+            "presence_penalty": 1.5,
+            "stream_options": {"include_usage": True},
+            "extra_body": {
+                "top_k": 20,
+                "min_p": 0.0,
                 "chat_template_kwargs": {"enable_thinking": True},
             },
         },
@@ -266,10 +413,7 @@ def call_llm(
     messages = [
         {
             "role": "system",
-            "content": (
-                "You are an expert evaluator for autonomous vehicle reasoning "
-                "systems. Respond with ONLY a single JSON object, no markdown."
-            ),
+            "content": JUDGE_SYSTEM_PROMPT,
         },
         {"role": "user", "content": user_content},
     ]
@@ -315,6 +459,10 @@ def call_llm(
                 attempt["chunk_count"] += 1
                 if first_chunk_elapsed_s is None:
                     first_chunk_elapsed_s = now - attempt_start
+                # Sent only when the request sets stream_options.include_usage.
+                usage = getattr(chunk, "usage", None)
+                if usage is not None:
+                    attempt["usage"] = usage.model_dump(exclude_none=True)
                 if not chunk.choices:
                     continue
                 delta = chunk.choices[0].delta

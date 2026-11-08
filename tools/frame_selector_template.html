@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<style>
+:root{font-family:system-ui,sans-serif;color:#17293c;background:#f4f6fa;--accent:#205cab;--border:#d9e1eb}
+*{box-sizing:border-box}body{margin:0}header,main{max-width:1600px;margin:auto;padding:18px 24px}h1{font-size:25px;margin:0 0 8px}h2{font-size:18px;margin:0 0 12px}h3{font-size:16px}p{line-height:1.5}button,input,select,textarea{font:inherit}button,select,input{padding:7px;border:1px solid var(--border);border-radius:5px;background:white;color:inherit}button{cursor:pointer}button:hover{border-color:var(--accent)}button:disabled{opacity:.45;cursor:default}.primary{background:var(--accent);color:white}.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.toolbar label{display:flex;gap:6px;align-items:center}.muted{color:#586b80;font-size:13px}.notice{background:#fff4d8;border:1px solid #e5c777;padding:10px;border-radius:6px}.error{color:#a41c23;white-space:pre-wrap}#status{min-height:20px}section,.panel{background:white;border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:15px}.dashboard{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.counts{font-size:12px;border-collapse:collapse;width:100%}.counts th{text-align:left;color:#586b80;font-weight:500}.counts td,.counts th{padding:5px 3px;vertical-align:top}.counts td:first-child{width:42%}.counts input{width:52px;padding:2px;font-size:12px}.counts button{padding:0;text-align:left;border:0;background:none;font-size:12px;color:var(--accent)}.bar{display:flex;height:5px;background:#e9eef4;margin-top:4px}.base{background:#487fc8}.added{background:#159578}.deficit{color:#a05a00;font-weight:600}.work{display:grid;grid-template-columns:300px 1fr;gap:16px}.scene-list{max-height:820px;overflow:auto}.scene-button{display:block;width:100%;text-align:left;margin:7px 0;padding:10px}.scene-button.active{border:2px solid var(--accent)}.scene-button.selected{background:#e6f5ef}.scene-button span{display:block;font-size:12px;color:#586b80;margin-top:4px}.media{display:grid;grid-template-columns:1fr 1fr;gap:12px}video,img{width:100%;max-height:310px;object-fit:contain;background:#111;border-radius:4px}.timeline{width:100%;padding:0;margin:14px 0}#cot{white-space:pre-wrap;font-size:17px;line-height:1.5;padding:12px;background:#f0f5fc;border-left:3px solid var(--accent)}.tags{display:grid;grid-template-columns:1fr 1fr;gap:10px}.tags label{display:flex;flex-direction:column;gap:5px}.causal{display:flex;flex-wrap:wrap;gap:12px;margin:14px 0}.causal label{font-size:14px}textarea{width:100%;min-height:64px;padding:8px;border:1px solid var(--border);border-radius:5px}.decision-list{max-height:220px;overflow:auto;margin-top:12px}.decision-list button{display:block;text-align:left;width:100%;margin:3px 0;font-size:13px}.chosen-row{padding:9px 0;border-bottom:1px solid var(--border)}.hidden,[hidden]{display:none!important}a{color:var(--accent)}.checkbox{display:block;margin:10px 0}footer{padding:12px;font-size:12px;color:#586b80}
+@media(max-width:1000px){.dashboard{grid-template-columns:1fr}.work{grid-template-columns:1fr}.scene-list{max-height:250px}.media{grid-template-columns:1fr}.counts td:first-child{width:50%}}
+.work>*{min-width:0}.toolbar label{max-width:100%;flex-wrap:wrap}select{max-width:100%}.tags select{width:100%;min-width:0}#scene-title,#frame-id,.scene-button,.chosen-row,#cot{overflow-wrap:anywhere}
+@media(max-width:600px){header,main{padding:14px 12px}.tags{grid-template-columns:1fr}}
+</style>
+<link rel="stylesheet" href="frame_selector_tour.css">
+</head>
+<body>
+<header>
+<h1>__TITLE__</h1>
+<p>Choose one decision frame per source clip. Prioritize CoT categories with small sample sizes, then export the chosen examples for independent annotation.</p>
+<div class="toolbar">
+<button id="start-tour" type="button">Take a tour</button>
+<a href="tutorial.html">Practice example</a>
+<label>Selector <input id="selector-name" placeholder="Your name or agent ID"></label>
+<button id="export" class="primary">Export selected examples</button>
+<span id="session-backup" class="toolbar">
+<button id="save">Save selection session</button>
+<button id="import">Restore session</button><input id="import-file" type="file" accept=".json" hidden>
+</span>
+<button id="import-labels">Import CoT suggestions</button><input id="labels-file" type="file" accept=".json" hidden>
+</div>
+<p id="status" role="status" aria-live="polite"></p>
+</header>
+<main>
+<section>
+<h2>Category sample sizes</h2>
+<p class="muted">Existing = cases in the supplied benchmark. Added = your confirmed selections. Available = distinct unselected clips with a matching provisional tag and usable extracted frame. A clip can count in several categories. Targets are editable planning choices.</p>
+<div id="summary"></div>
+<div id="dashboard" class="dashboard"></div>
+<div id="category-focus" class="toolbar" style="margin-top:12px">
+<label>Focus category <select id="focus"><option value="">All categories</option></select></label>
+<button id="clear-focus">Clear focus</button>
+<label><input id="only-selected" type="checkbox"> Selected clips only</label>
+</div>
+</section>
+<div class="work">
+<aside class="panel"><div id="scene-controls"><h2>Source clips</h2><input id="search" placeholder="Search clip or CoT" aria-label="Search clips"><p class="muted">Ordered by potential shortfall reduction. No safety or reliability scores are used.</p></div><div id="scenes" class="scene-list"></div></aside>
+<section>
+<h2 id="scene-title">Choose a clip</h2><p id="scene-status" class="muted"></p>
+<div class="media">
+<div><video id="video" controls preload="metadata"></video><p class="muted">Rollout browser. Later video shows replanning, not execution of the selected plan.</p></div>
+<div><img id="frame-image" alt="Exact camera input at the selected decision" hidden><p class="muted">Exact extracted input frame. Verify it against the approximate video seek time.</p></div>
+</div>
+<div id="frame-work" hidden>
+<div id="decision-navigation"><div class="toolbar"><button id="previous">Previous decision</button><button id="next">Next decision</button><button id="from-video">Use nearest decision to video time</button></div>
+<input id="timeline" class="timeline" type="range" min="0" max="0" value="0" aria-label="Decision timeline">
+</div>
+<p id="frame-id" class="muted"></p><div id="cot"></div><p id="proposal-source" class="muted"></p>
+<div id="category-editor">
+<div class="tags"><label>Longitudinal decision<select id="longitudinal"></select></label><label>Lateral decision<select id="lateral"></select></label></div>
+<div id="causal" class="causal"></div>
+<label class="checkbox"><input id="confirm-tags" type="checkbox"> I checked the categories against the stated CoT, including any absence of a decision.</label>
+</div>
+<div id="selection-reason">
+<label for="reason">Why include this frame?</label><textarea id="reason" placeholder="For example: adds a speed-adaptation case from a new source clip."></textarea>
+<p id="impact" class="muted"></p>
+</div>
+<div id="selection-actions" class="toolbar"><button id="choose" class="primary">Select this frame for the clip</button><button id="remove">Remove clip selection</button></div>
+<h3>Candidate decisions</h3><div id="decisions" class="decision-list"></div>
+</div>
+</section>
+</div>
+<section id="selected-panel"><h2>Selected examples</h2><div id="selected"></div></section>
+<footer>Browser autosave is local to this workspace. Download a session backup before moving or rebuilding it. Media files are linked to the original rollout directories.</footer>
+</main>
+<script id="selector-data" type="application/json">__DATA__</script>
+<script src="frame_selector.js"></script>
+<script src="frame_selector_tour.js"></script>
+</body></html>

@@ -6,7 +6,7 @@
 
 Examples:
     uv run python tools/check_consistency_accuracy.py \
-        --consistency-file data/results/llm_matrix/gpt.f_llm_map_graph.run_003.json \
+        --consistency-file data/results/llm_matrix/opus.f_llm_map_graph.run_001.json \
         --benchmark-file data/benchmark/benchmark.json \
         --reliable-only
 

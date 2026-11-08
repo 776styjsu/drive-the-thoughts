@@ -16,6 +16,7 @@ Model backends are selectable with --provider (see
 ``alpasim_utils.cot_consistency.llm_judge.PROVIDERS``):
     kimi          - Kimi K2.5 via the Moonshot API (key: MOONSHOT_API_KEY)
     openai        - GPT-5.5 with high reasoning effort (key: OPENAI_API_KEY)
+    deepseek      - DeepSeek V4.1 Flash, thinking mode (key: DEEPSEEK_API_KEY)
     qwen3_4b_fp8  - Qwen3-4B-FP8 via a local vLLM server
     qwen35_4b_fp8 - Qwen3.5-4B-FP8 via a local vLLM server
 
@@ -58,8 +59,8 @@ from alpasim_utils.cot_consistency import (
     build_client,
     consistency_variant_names,
     normalize_consistency_variant_name,
-    resolve_provider,
     resolve_consistency_variant,
+    resolve_provider,
 )
 from benchmark_analysis import flatten_cot
 
@@ -73,7 +74,9 @@ from .pipeline import (
     build_output_data,
     log_evaluation_summary,
     log_feature_summary,
+    prepare_judge_input,
     process_entry,
+    result_is_complete,
 )
 from .prompts import discover_prompt_names, resolve_prompt_builder
 
@@ -163,8 +166,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "Coupled prompt/feature configuration. Public choices: %s. "
-            "Legacy aliases are also accepted."
-            % ", ".join(consistency_variant_names())
+            "Legacy aliases are also accepted." % ", ".join(consistency_variant_names())
         ),
     )
     parser.add_argument(
@@ -174,8 +176,7 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Advanced override for --variant: registered prompt name (%s), "
             "or a path to a .py file defining build_prompt(cot_text, "
-            "traj_features)."
-            % ", ".join(discover_prompt_names())
+            "traj_features)." % ", ".join(discover_prompt_names())
         ),
     )
     parser.add_argument(
@@ -236,9 +237,13 @@ def _resolve_variant_settings(args: argparse.Namespace) -> tuple[str, str, str, 
 
 
 def load_resumable_results(
-    output_path: Path, all_entries: list[dict]
+    output_path: Path,
+    all_entries: list[dict],
+    *,
+    run_config: dict,
+    input_fingerprints: dict[str, str],
 ) -> tuple[list[dict], set[str]]:
-    """Load prior results for --resume, keeping only clean, in-scope entries."""
+    """Reuse only complete judgments for the same request settings/evidence."""
     try:
         with output_path.open("r") as f:
             saved = json.load(f)
@@ -246,7 +251,14 @@ def load_resumable_results(
         logger.warning("Output file invalid. Starting fresh.")
         return [], set()
 
-    loaded_results = saved.get("results", saved) if isinstance(saved, dict) else saved
+    if not isinstance(saved, dict) or saved.get("run_config") != run_config:
+        logger.warning(
+            "Saved judge configuration is missing or differs from this run; "
+            "re-evaluating all entries."
+        )
+        return [], set()
+
+    loaded_results = saved.get("results", [])
     if isinstance(loaded_results, dict):
         loaded_results = [loaded_results]
     elif not isinstance(loaded_results, list):
@@ -258,17 +270,25 @@ def load_resumable_results(
         for r in loaded_results
         if isinstance(r, dict) and r.get("clip_id") in allowed_ids
     ]
-    results = [
-        r
+    # A repeated clip ID in an older output must not duplicate its contribution
+    # to aggregate metrics when resuming.
+    reusable = {
+        r["clip_id"]: r
         for r in current_results
-        if not r.get("error") and not r.get("evaluation", {}).get("error")
-    ]
+        if result_is_complete(r)
+        and r.get("judge_input_fingerprint") is not None
+        and r.get("judge_input_fingerprint") == input_fingerprints.get(r["clip_id"])
+    }
+    results = list(reusable.values())
     completed_ids = {r["clip_id"] for r in results}
 
     logger.info("Resuming: %d entries already completed", len(completed_ids))
     retry_results = len(current_results) - len(results)
     if retry_results:
-        logger.info("Retrying %d saved result(s) with prior errors", retry_results)
+        logger.info(
+            "Retrying %d saved result(s) with incomplete judgments or changed inputs",
+            retry_results,
+        )
     dropped_results = len(loaded_results) - len(current_results)
     if dropped_results:
         logger.info(
@@ -276,6 +296,26 @@ def load_resumable_results(
             dropped_results,
         )
     return results, completed_ids
+
+
+def _judge_run_config(
+    args: argparse.Namespace, provider: dict, use_images: bool
+) -> dict:
+    """Persist effective request settings, excluding API credentials."""
+    return {
+        "schema_version": 1,
+        "provider": args.provider,
+        "model": provider["model"],
+        "base_url": provider["base_url"],
+        "seed": args.seed,
+        "temperature": provider["temperature"],
+        "extra_params": provider["extra_params"],
+        "variant": args.variant,
+        "prompt": args.prompt,
+        "trajectory_frame": args.trajectory_frame,
+        "lane_reference": args.lane_reference,
+        "use_images": use_images,
+    }
 
 
 def main():
@@ -343,11 +383,21 @@ def main():
             args.trajectory_frame,
         )
 
+    use_images = not args.no_images
+    if use_images and not provider["supports_images"]:
+        logger.info(
+            "%s is text-only for this workflow; disabling image inputs.",
+            provider["label"],
+        )
+        use_images = False
+    run_config = _judge_run_config(args, provider, use_images)
+
     # --- Extract entries ---
     all_entries = extract_entries_from_benchmark(
         args.benchmark_json,
         source_root=args.benchmark_source_root,
-        load_raw_trajectory=args.trajectory_frame in {"lane_center", "dual"},
+        trajectory_frame=args.trajectory_frame,
+        lane_reference=args.lane_reference,
     )
     original_entry_count = len(all_entries)
     skipped_unreliable_cot_entries = []
@@ -363,6 +413,22 @@ def main():
 
     logger.info("Total entries to analyze: %d", len(all_entries))
 
+    # Prepare once so resume compares the same evidence that inference uses.
+    judge_inputs = {}
+    for entry in all_entries:
+        if entry.get("error"):
+            continue
+        try:
+            judge_inputs[entry["clip_id"]] = prepare_judge_input(
+                entry,
+                prompt_name=args.prompt,
+                trajectory_frame=args.trajectory_frame,
+                lane_reference=args.lane_reference,
+                use_images=use_images,
+            )
+        except Exception as exc:
+            entry["error"] = str(exc)
+
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -374,6 +440,7 @@ def main():
             original_entry_count=original_entry_count,
             skipped_unreliable_cot_entries=skipped_unreliable_cot_entries,
         )
+        output_data["run_config"] = run_config
         with output_path.open("w") as f:
             json.dump(output_data, f, indent=2, default=str)
         return output_data["summary"]
@@ -388,17 +455,17 @@ def main():
         return
 
     if args.resume and output_path.exists():
-        results, completed_ids = load_resumable_results(output_path, all_entries)
+        results, completed_ids = load_resumable_results(
+            output_path,
+            all_entries,
+            run_config=run_config,
+            input_fingerprints={
+                clip_id: prepared.fingerprint
+                for clip_id, prepared in judge_inputs.items()
+            },
+        )
 
     # --- Process entries ---
-    use_images = not args.no_images
-    if use_images and not provider["supports_images"]:
-        logger.info(
-            "%s is text-only for this workflow; disabling image inputs.",
-            provider["label"],
-        )
-        use_images = False
-
     summary: dict = {}
     for idx, entry in enumerate(all_entries):
         clip_id = entry["clip_id"]
@@ -440,6 +507,7 @@ def main():
                 seed=args.seed,
                 temperature=provider["temperature"],
                 extra_params=provider["extra_params"],
+                judge_input=judge_inputs[clip_id],
             )
             results.append(result)
             log_feature_summary(result["trajectory_features"].get("summary_stats", {}))

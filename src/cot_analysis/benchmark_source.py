@@ -19,6 +19,7 @@ import logging
 from pathlib import Path
 
 import numpy as np
+
 from alpasim_utils.lane_projection import lane_center_lines_from_geometry
 from benchmark_analysis import (
     cot_is_unreliable,
@@ -27,6 +28,8 @@ from benchmark_analysis import (
     reliability_justification,
     unreliability_taxonomy,
 )
+
+from .features import cached_features_for_frame
 
 logger = logging.getLogger(__name__)
 
@@ -91,8 +94,35 @@ def _metadata_trajectory_to_xy(
         return None, None, metadata.get("time_now_us")
 
     map_xy = np.asarray([[pose["x"], pose["y"]] for pose in poses], dtype=float)
-    relative_xy = map_xy - map_xy[0]
+    rig_points = metadata.get("trajectory_xy_rig_frame") or []
+    if len(rig_points) == len(map_xy):
+        # Anchor-rotated by extract_frame (+X forward, +Y left).
+        relative_xy = np.asarray(
+            [[point["rx"], point["ry"]] for point in rig_points], dtype=float
+        )
+    else:
+        relative_xy = _map_xy_to_rig_frame(map_xy)
     return relative_xy, map_xy, metadata.get("time_now_us")
+
+
+def _map_xy_to_rig_frame(map_xy: np.ndarray, min_step_m: float = 0.05) -> np.ndarray:
+    """Express map-frame XY relative to the first point, X along initial motion.
+
+    Fallback for metadata without ``trajectory_xy_rig_frame``. ``trajectory_poses``
+    carries no orientation, so the anchor heading is estimated from the first
+    step that moves more than ``min_step_m``; a stationary trajectory is only
+    translated.
+    """
+    relative_xy = map_xy - map_xy[0]
+    steps = np.diff(map_xy, axis=0)
+    moving = np.linalg.norm(steps, axis=1) > min_step_m
+    if not np.any(moving):
+        return relative_xy
+    dx, dy = steps[int(np.argmax(moving))]
+    yaw = np.arctan2(dy, dx)
+    cos_yaw, sin_yaw = np.cos(yaw), np.sin(yaw)
+    rotation = np.array([[cos_yaw, sin_yaw], [-sin_yaw, cos_yaw]])
+    return relative_xy @ rotation.T
 
 
 def _find_clip_file(
@@ -157,13 +187,16 @@ def extract_entries_from_benchmark(
     benchmark_json: str,
     source_root: str = ".",
     load_raw_trajectory: bool = False,
+    *,
+    trajectory_frame: str = "ego_rig",
+    lane_reference: str = "auto",
 ) -> list[dict]:
     """Load benchmark-selected entries, reusing cached trajectory features.
 
     The source judge reports referenced by ``source_scene_file`` already
     include ``trajectory_features``, so those are reused by default. Set
-    ``load_raw_trajectory`` when the requested feature frame may need
-    recomputation, e.g. lane-center features from map geometry.
+    ``load_raw_trajectory`` to force loading raw geometry. Otherwise it is
+    loaded whenever the cache cannot provide the requested coordinate frame.
     """
     benchmark_path = Path(benchmark_json)
     benchmark_items = extract_entries(load_json(benchmark_path))
@@ -207,7 +240,12 @@ def extract_entries_from_benchmark(
         timestamp_us = source_result.get("timestamp_us") if source_result else None
         should_load_raw = load_raw_trajectory or (
             source_result is not None
-            and source_result.get("trajectory_features") is None
+            and cached_features_for_frame(
+                source_result.get("trajectory_features"),
+                trajectory_frame,
+                lane_reference,
+            )
+            is None
         )
         if source_result and should_load_raw and source_path:
             try:

@@ -5,17 +5,28 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
+import math
+from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
+
 from alpasim_utils.cot_consistency import (
     DEFAULT_SEED,
     call_llm,
     compute_trajectory_features,
     parse_response,
 )
+from alpasim_utils.cot_consistency.llm_judge import (
+    JUDGE_SYSTEM_PROMPT,
+    image_to_data_url,
+)
 from benchmark_analysis import flatten_cot
 
+from .features import cached_features_for_frame
 from .prompts import resolve_prompt_builder
 
 logger = logging.getLogger(__name__)
@@ -24,25 +35,85 @@ logger = logging.getLogger(__name__)
 DIMENSIONS = ["cot_output_alignment"]
 
 
-def _use_cached_features(
-    cached_features: dict | None, trajectory_frame: str, lane_reference: str
-) -> bool:
-    """Whether features cached in a source report match the requested frames."""
-    if not isinstance(cached_features, dict):
+@dataclass(frozen=True)
+class JudgeInput:
+    """Prepared evidence reused for resume checks and the actual judge call."""
+
+    cot_text: str
+    trajectory_features: dict
+    prompt: str
+    image: Any
+    fingerprint: str
+
+
+def prepare_judge_input(
+    entry: dict,
+    *,
+    prompt_name: str = "default",
+    trajectory_frame: str = "ego_rig",
+    lane_reference: str = "auto",
+    use_images: bool = True,
+) -> JudgeInput:
+    cot_text = flatten_cot(entry["chain_of_thought"])
+    features = cached_features_for_frame(
+        entry.get("trajectory_features"), trajectory_frame, lane_reference
+    )
+    if features is None:
+        features = compute_trajectory_features(
+            entry.get("trajectory_xy"),
+            route_xy=entry.get("route_xy"),
+            trajectory_world_xy=entry.get("trajectory_map_xy"),
+            lane_center_lines=entry.get("lane_center_lines"),
+            reference_frame=trajectory_frame,
+            lane_reference=lane_reference,
+        )
+    if features.get("error"):
+        raise ValueError(f"Cannot prepare trajectory evidence: {features['error']}")
+    prompt = resolve_prompt_builder(prompt_name)(cot_text, features)
+    image = entry.get("image") if use_images else None
+    # Hash the evidence actually presented to the judge, including prompt-file
+    # edits and image contents. Never hash file names in place of their data.
+    evidence = {
+        "system_prompt": JUDGE_SYSTEM_PROMPT,
+        "prompt": prompt,
+        "trajectory_features": features,
+        "image": image_to_data_url(image) if image is not None else None,
+        "timestamp_us": entry.get("timestamp_us"),
+    }
+    fingerprint = hashlib.sha256(
+        json.dumps(evidence, sort_keys=True, ensure_ascii=False).encode("utf-8")
+    ).hexdigest()
+    return JudgeInput(cot_text, features, prompt, image, fingerprint)
+
+
+def result_is_complete(result: dict) -> bool:
+    """Only successful, usable evaluations qualify for resume or completion."""
+    evaluation = result.get("evaluation")
+    if result.get("error") or not isinstance(evaluation, dict):
         return False
-    cached_stats = cached_features.get("summary_stats", {})
-    if not isinstance(cached_stats, dict):
-        cached_stats = {}
-    if trajectory_frame == "ego_rig":
-        return True
-    cached_lane_reference = cached_stats.get("lane_reference")
-    lane_reference_matches = cached_lane_reference == lane_reference or (
-        lane_reference == "auto"
-        and cached_lane_reference in {"auto", "map_graph", "route"}
-    )
-    return cached_stats.get("reference_frame") == trajectory_frame and (
-        lane_reference_matches
-    )
+    if any(evaluation.get(key) for key in ("dry_run", "parse_error", "error")):
+        return False
+    for dimension in DIMENSIONS:
+        data = evaluation.get(dimension)
+        if not isinstance(data, dict):
+            return False
+        if "score" in data:
+            if isinstance(data["score"], bool):
+                return False
+            try:
+                score = float(data["score"])
+            except (TypeError, ValueError):
+                return False
+            if not math.isfinite(score) or not 1 <= score <= 5:
+                return False
+        else:
+            verdict = data.get("verdict")
+            if not isinstance(verdict, str) or verdict.strip().lower() not in {
+                "consistent",
+                "inconsistent",
+            }:
+                return False
+    return True
 
 
 def process_entry(
@@ -57,34 +128,28 @@ def process_entry(
     seed: int = DEFAULT_SEED,
     temperature: float | None = 0,
     extra_params: dict | None = None,
+    *,
+    judge_input: JudgeInput | None = None,
 ) -> dict:
     """Judge one extracted entry: features -> prompt -> LLM -> parsed result."""
     clip_id = entry["clip_id"]
-    cot_text = flatten_cot(entry["chain_of_thought"])
-
-    cached_features = entry.get("trajectory_features")
-    if _use_cached_features(cached_features, trajectory_frame, lane_reference):
-        traj_features = dict(cached_features)
-    else:
-        traj_features = compute_trajectory_features(
-            entry["trajectory_xy"],
-            route_xy=entry.get("route_xy"),
-            trajectory_world_xy=entry.get("trajectory_map_xy"),
-            lane_center_lines=entry.get("lane_center_lines"),
-            reference_frame=trajectory_frame,
-            lane_reference=lane_reference,
-        )
-
-    prompt_builder = resolve_prompt_builder(prompt_name)
-    prompt = prompt_builder(cot_text, traj_features)
+    prepared = judge_input or prepare_judge_input(
+        entry,
+        prompt_name=prompt_name,
+        trajectory_frame=trajectory_frame,
+        lane_reference=lane_reference,
+        use_images=use_images,
+    )
 
     llm_timing = None
+    raw_response = None
+    image = None
     if client is not None:
-        image = entry.get("image") if use_images else None
+        image = prepared.image
         raw_response, llm_timing = call_llm(
             client,
             model_name,
-            prompt,
+            prepared.prompt,
             image=image,
             seed=seed,
             temperature=temperature,
@@ -97,9 +162,16 @@ def process_entry(
 
     result = {
         "clip_id": clip_id,
-        "chain_of_thought": cot_text,
-        "trajectory_features": traj_features,
+        "chain_of_thought": prepared.cot_text,
+        "trajectory_features": prepared.trajectory_features,
         "evaluation": parsed,
+        # Verbatim judge exchange. Parsing keeps only the scored dimensions, so
+        # without these a disagreement, a refusal, or a malformed response
+        # cannot be audited once the run is over.
+        "judge_prompt": prepared.prompt,
+        "judge_input_fingerprint": prepared.fingerprint,
+        "judge_raw_response": raw_response,
+        "judge_image_attached": image is not None,
         "timestamp_us": entry.get("timestamp_us"),
         "variant": variant_name,
         "prompt": prompt_name,
@@ -146,7 +218,7 @@ def aggregate_results(results: list) -> dict:
     verdicts = {d: [] for d in DIMENSIONS}
     for r in results:
         ev = r.get("evaluation", {})
-        if ev.get("dry_run") or ev.get("parse_error") or ev.get("error"):
+        if not result_is_complete(r):
             continue
         for d in DIMENSIONS:
             dim_data = ev.get(d, {})
@@ -179,6 +251,8 @@ def aggregate_results(results: list) -> dict:
     # Flag entries judged inconsistent (score <= 2 or verdict == inconsistent)
     flagged = []
     for r in results:
+        if not result_is_complete(r):
+            continue
         ev = r.get("evaluation", {})
         for d in DIMENSIONS:
             dim_data = ev.get(d, {})
@@ -195,13 +269,7 @@ def aggregate_results(results: list) -> dict:
                 )
 
     summary["flagged_entries"] = flagged
-    summary["total_evaluated"] = sum(
-        1
-        for r in results
-        if not r.get("error")
-        and not r.get("evaluation", {}).get("dry_run")
-        and not r.get("evaluation", {}).get("error")
-    )
+    summary["total_evaluated"] = sum(result_is_complete(r) for r in results)
     return summary
 
 

@@ -182,6 +182,7 @@ def build_route_consistent_reference(
     max_lanes_per_path: int = 12,
     max_candidate_paths: int = 64,
     max_start_candidates: int = 3,
+    start_search_radius_m: float = 3.0,
     stay_on_start_lane: bool = False,
 ) -> tuple[np.ndarray, int]:
     """Build a single route-consistent lane-center reference (Werling-style).
@@ -193,8 +194,11 @@ def build_route_consistent_reference(
     succeeds lane A when B's start endpoint lies within endpoint_tol_m of A's
     end endpoint with continuing heading. Where the graph forks (merge/split),
     the branch minimizing total lateral deviation over the full horizon wins.
-    When ``stay_on_start_lane`` is true, the same starting-lane candidates are
-    evaluated without traversing to predecessor or successor lanes.
+    Starting-lane candidates are the (at most max_start_candidates) heading-
+    aligned lanes within start_search_radius_m of the ego; if none is that
+    close, the single nearest lane is used. When ``stay_on_start_lane`` is
+    true, the same starting-lane candidates are evaluated without traversing
+    to predecessor or successor lanes.
 
     Returns:
         Tuple of (reference_xy, lanes_used) for the best path.
@@ -259,12 +263,11 @@ def build_route_consistent_reference(
     if not start_candidates:
         raise ValueError("Could not match trajectory start to any lane center")
     start_candidates.sort(key=lambda item: item[0])
-    min_start_dist = start_candidates[0][0]
     start_nodes = [
         node
         for dist, node in start_candidates[:max_start_candidates]
-        if dist <= max(3.0, min_start_dist + 1.0)
-    ]
+        if dist <= start_search_radius_m
+    ] or [start_candidates[0][1]]
 
     traj_steps = np.diff(trajectory_xy, axis=0)
     traj_length = float(np.sum(np.linalg.norm(traj_steps, axis=1)))
