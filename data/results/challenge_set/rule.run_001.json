@@ -1,0 +1,1250 @@
+{
+  "schema_version": 1,
+  "kind": "alpasim_cot_consistency_report",
+  "benchmark_file": "runs/ood_hazard_2604_20261101/ood15.json",
+  "benchmark_source_root": ".",
+  "match_mode": "exact",
+  "meta_action_source": "additional_info.json",
+  "meta_action_thresholds": null,
+  "summary": {
+    "total_clips": 15,
+    "scored_clips": 15,
+    "errored_clips": 0,
+    "mean_score": 0.7333333333333333,
+    "min_score": 0.0,
+    "max_score": 1.0,
+    "label_distribution": {
+      "consistent": 11,
+      "inconsistent": 4
+    },
+    "longitudinal_verdict_distribution": {
+      "no_intent": 7,
+      "consistent": 6,
+      "mismatch": 2
+    },
+    "lateral_verdict_distribution": {
+      "consistent": 5,
+      "no_intent": 8,
+      "mismatch": 2
+    },
+    "contradictions": [],
+    "errors": []
+  },
+  "results": [
+    {
+      "clip_id": "clipgt-44c3b4d5-de26-4ba6-b748-c3a22730a717_t0100",
+      "metadata_path": "data/media/scenes/clipgt-44c3b4d5-de26-4ba6-b748-c3a22730a717_t0100/metadata.json",
+      "cot_text": "['Turn left at the intersection since the left-turn traffic light is green']",
+      "report": {
+        "score": 1.0,
+        "label": "consistent",
+        "longitudinal": {
+          "axis": "longitudinal",
+          "cot_label": "unknown",
+          "trajectory_label": "maintain_speed",
+          "cot_family": null,
+          "trajectory_family": null,
+          "verdict": "no_intent",
+          "reward": 1.0,
+          "cot_sequence": [],
+          "trajectory_sequence": [
+            "maintain_speed",
+            "gentle_decelerate",
+            "maintain_speed",
+            "gentle_accelerate",
+            "maintain_speed",
+            "gentle_decelerate",
+            "reverse"
+          ],
+          "matched_actions": []
+        },
+        "lateral": {
+          "axis": "lateral",
+          "cot_label": "steer_left",
+          "trajectory_label": "go_straight",
+          "cot_family": null,
+          "trajectory_family": null,
+          "verdict": "consistent",
+          "reward": 1.0,
+          "cot_sequence": [
+            "steer_left"
+          ],
+          "trajectory_sequence": [
+            "go_straight",
+            "steer_left",
+            "sharp_steer_left",
+            "steer_left",
+            "reverse_left",
+            "go_straight",
+            "reverse_right"
+          ],
+          "matched_actions": [
+            {
+              "cot_label": "steer_left",
+              "trajectory_label": "steer_left",
+              "trajectory_index": 1
+            }
+          ]
+        },
+        "cot_parse": {
+          "parser": "keyword",
+          "longitudinal": "unknown",
+          "lateral": "steer_left",
+          "longitudinal_sequence": [],
+          "lateral_sequence": [
+            "steer_left"
+          ],
+          "longitudinal_evidence": [],
+          "lateral_evidence": [
+            {
+              "phrase": "turn left",
+              "label": "steer_left",
+              "start": 2,
+              "end": 11,
+              "negated": false
+            }
+          ],
+          "all_matches": [
+            {
+              "phrase": "turn left",
+              "label": "steer_left",
+              "start": 2,
+              "end": 11,
+              "negated": false
+            }
+          ],
+          "text": "['turn left at the intersection since the left-turn traffic light is green']"
+        }
+      },
+      "error": null
+    },
+    {
+      "clip_id": "clipgt-52bd89ce-db30-4525-9fa1-b0c0dd72f5f4_t0101",
+      "metadata_path": "data/media/scenes/clipgt-52bd89ce-db30-4525-9fa1-b0c0dd72f5f4_t0101/metadata.json",
+      "cot_text": "['Adjust speed and keep safe distance due to the lead vehicle ahead']",
+      "report": {
+        "score": 1.0,
+        "label": "consistent",
+        "longitudinal": {
+          "axis": "longitudinal",
+          "cot_label": "gentle_decelerate",
+          "trajectory_label": "maintain_speed",
+          "cot_family": null,
+          "trajectory_family": null,
+          "verdict": "consistent",
+          "reward": 1.0,
+          "cot_sequence": [
+            "gentle_decelerate"
+          ],
+          "trajectory_sequence": [
+            "maintain_speed",
+            "gentle_decelerate",
+            "maintain_speed",
+            "gentle_accelerate",
+            "maintain_speed",
+            "gentle_decelerate",
+            "maintain_speed",
+            "gentle_accelerate"
+          ],
+          "matched_actions": [
+            {
+              "cot_label": "gentle_decelerate",
+              "trajectory_label": "gentle_decelerate",
+              "trajectory_index": 1
+            }
+          ]
+        },
+        "lateral": {
+          "axis": "lateral",
+          "cot_label": "unknown",
+          "trajectory_label": "go_straight",
+          "cot_family": null,
+          "trajectory_family": null,
+          "verdict": "no_intent",
+          "reward": 1.0,
+          "cot_sequence": [],
+          "trajectory_sequence": [
+            "go_straight",
+            "sharp_steer_left",
+            "steer_left",
+            "sharp_steer_left",
+            "steer_left"
+          ],
+          "matched_actions": []
+        },
+        "cot_parse": {
+          "parser": "keyword",
+          "longitudinal": "gentle_decelerate",
+          "lateral": "unknown",
+          "longitudinal_sequence": [
+            "gentle_decelerate"
+          ],
+          "lateral_sequence": [],
+          "longitudinal_evidence": [
+            {
+              "phrase": "adjust speed",
+              "label": "gentle_decelerate",
+              "start": 2,
+              "end": 14,
+              "negated": false
+            }
+          ],
+          "lateral_evidence": [],
+          "all_matches": [
+            {
+              "phrase": "adjust speed",
+              "label": "gentle_decelerate",
+              "start": 2,
+              "end": 14,
+              "negated": false
+            }
+          ],
+          "text": "['adjust speed and keep safe distance due to the lead vehicle ahead']"
+        }
+      },
+      "error": null
+    },
+    {
+      "clip_id": "clipgt-f109888b-1fff-48c7-b35c-c02307c58216_t0110",
+      "metadata_path": "data/media/scenes/clipgt-f109888b-1fff-48c7-b35c-c02307c58216_t0110/metadata.json",
+      "cot_text": "['Nudge to the left to clear the construction cones blocking the right side of our lane']",
+      "report": {
+        "score": 0.0,
+        "label": "inconsistent",
+        "longitudinal": {
+          "axis": "longitudinal",
+          "cot_label": "unknown",
+          "trajectory_label": "maintain_speed",
+          "cot_family": null,
+          "trajectory_family": null,
+          "verdict": "no_intent",
+          "reward": 1.0,
+          "cot_sequence": [],
+          "trajectory_sequence": [
+            "maintain_speed",
+            "gentle_decelerate",
+            "maintain_speed",
+            "gentle_decelerate",
+            "maintain_speed",
+            "gentle_decelerate"
+          ],
+          "matched_actions": []
+        },
+        "lateral": {
+          "axis": "lateral",
+          "cot_label": "steer_left",
+          "trajectory_label": "go_straight",
+          "cot_family": null,
+          "trajectory_family": null,
+          "verdict": "mismatch",
+          "reward": 0.0,
+          "cot_sequence": [
+            "steer_left"
+          ],
+          "trajectory_sequence": [
+            "go_straight"
+          ],
+          "matched_actions": []
+        },
+        "cot_parse": {
+          "parser": "keyword",
+          "longitudinal": "unknown",
+          "lateral": "steer_left",
+          "longitudinal_sequence": [],
+          "lateral_sequence": [
+            "steer_left"
+          ],
+          "longitudinal_evidence": [],
+          "lateral_evidence": [
+            {
+              "phrase": "nudge to the left",
+              "label": "steer_left",
+              "start": 2,
+              "end": 19,
+              "negated": false
+            }
+          ],
+          "all_matches": [
+            {
+              "phrase": "nudge to the left",
+              "label": "steer_left",
+              "start": 2,
+              "end": 19,
+              "negated": false
+            }
+          ],
+          "text": "['nudge to the left to clear the construction cones blocking the right side of our lane']"
+        }
+      },
+      "error": null
+    },
+    {
+      "clip_id": "clipgt-f6885ef2-a7aa-432e-bc35-f702c93afa01_t0056",
+      "metadata_path": "data/media/scenes/clipgt-f6885ef2-a7aa-432e-bc35-f702c93afa01_t0056/metadata.json",
+      "cot_text": "['Adapt speed for the right curve since the lane bends right ahead']",
+      "report": {
+        "score": 1.0,
+        "label": "consistent",
+        "longitudinal": {
+          "axis": "longitudinal",
+          "cot_label": "gentle_decelerate",
+          "trajectory_label": "maintain_speed",
+          "cot_family": null,
+          "trajectory_family": null,
+          "verdict": "consistent",
+          "reward": 1.0,
+          "cot_sequence": [
+            "gentle_decelerate"
+          ],
+          "trajectory_sequence": [
+            "maintain_speed",
+            "gentle_decelerate",
+            "strong_decelerate",
+            "gentle_decelerate",
+            "maintain_speed",
+            "gentle_accelerate",
+            "reverse"
+          ],
+          "matched_actions": [
+            {
+              "cot_label": "gentle_decelerate",
+              "trajectory_label": "gentle_decelerate",
+              "trajectory_index": 1
+            }
+          ]
+        },
+        "lateral": {
+          "axis": "lateral",
+          "cot_label": "unknown",
+          "trajectory_label": "go_straight",
+          "cot_family": null,
+          "trajectory_family": null,
+          "verdict": "no_intent",
+          "reward": 1.0,
+          "cot_sequence": [],
+          "trajectory_sequence": [
+            "go_straight",
+            "steer_right",
+            "sharp_steer_right",
+            "reverse_right"
+          ],
+          "matched_actions": []
+        },
+        "cot_parse": {
+          "parser": "keyword",
+          "longitudinal": "gentle_decelerate",
+          "lateral": "unknown",
+          "longitudinal_sequence": [
+            "gentle_decelerate"
+          ],
+          "lateral_sequence": [],
+          "longitudinal_evidence": [
+            {
+              "phrase": "adapt speed",
+              "label": "gentle_decelerate",
+              "start": 2,
+              "end": 13,
+              "negated": false
+            }
+          ],
+          "lateral_evidence": [],
+          "all_matches": [
+            {
+              "phrase": "adapt speed",
+              "label": "gentle_decelerate",
+              "start": 2,
+              "end": 13,
+              "negated": false
+            }
+          ],
+          "text": "['adapt speed for the right curve since the lane bends right ahead']"
+        }
+      },
+      "error": null
+    },
+    {
+      "clip_id": "clipgt-e96df3d2-9c50-421e-b7ea-c606b93bb6f2_t0178",
+      "metadata_path": "data/media/scenes/clipgt-e96df3d2-9c50-421e-b7ea-c606b93bb6f2_t0178/metadata.json",
+      "cot_text": "['Nudge to the right to increase clearance from the oncoming vehicle']",
+      "report": {
+        "score": 0.0,
+        "label": "inconsistent",
+        "longitudinal": {
+          "axis": "longitudinal",
+          "cot_label": "unknown",
+          "trajectory_label": "maintain_speed",
+          "cot_family": null,
+          "trajectory_family": null,
+          "verdict": "no_intent",
+          "reward": 1.0,
+          "cot_sequence": [],
+          "trajectory_sequence": [
+            "maintain_speed",
+            "gentle_decelerate",
+            "maintain_speed",
+            "gentle_decelerate",
+            "maintain_speed",
+            "gentle_accelerate",
+            "maintain_speed",
+            "gentle_accelerate",
+            "maintain_speed",
+            "gentle_decelerate",
+            "maintain_speed",
+            "gentle_decelerate"
+          ],
+          "matched_actions": []
+        },
+        "lateral": {
+          "axis": "lateral",
+          "cot_label": "steer_right",
+          "trajectory_label": "go_straight",
+          "cot_family": null,
+          "trajectory_family": null,
+          "verdict": "mismatch",
+          "reward": 0.0,
+          "cot_sequence": [
+            "steer_right"
+          ],
+          "trajectory_sequence": [
+            "go_straight",
+            "steer_left"
+          ],
+          "matched_actions": []
+        },
+        "cot_parse": {
+          "parser": "keyword",
+          "longitudinal": "unknown",
+          "lateral": "steer_right",
+          "longitudinal_sequence": [],
+          "lateral_sequence": [
+            "steer_right"
+          ],
+          "longitudinal_evidence": [],
+          "lateral_evidence": [
+            {
+              "phrase": "nudge to the right",
+              "label": "steer_right",
+              "start": 2,
+              "end": 20,
+              "negated": false
+            }
+          ],
+          "all_matches": [
+            {
+              "phrase": "nudge to the right",
+              "label": "steer_right",
+              "start": 2,
+              "end": 20,
+              "negated": false
+            }
+          ],
+          "text": "['nudge to the right to increase clearance from the oncoming vehicle']"
+        }
+      },
+      "error": null
+    },
+    {
+      "clip_id": "clipgt-170a3280-64dc-488a-bd73-0a5f6fc5617a_t0080",
+      "metadata_path": "data/media/scenes/clipgt-170a3280-64dc-488a-bd73-0a5f6fc5617a_t0080/metadata.json",
+      "cot_text": "['Keep lane since no lead vehicle is present ahead']",
+      "report": {
+        "score": 1.0,
+        "label": "consistent",
+        "longitudinal": {
+          "axis": "longitudinal",
+          "cot_label": "unknown",
+          "trajectory_label": "maintain_speed",
+          "cot_family": null,
+          "trajectory_family": null,
+          "verdict": "no_intent",
+          "reward": 1.0,
+          "cot_sequence": [],
+          "trajectory_sequence": [
+            "maintain_speed",
+            "gentle_decelerate",
+            "strong_decelerate",
+            "gentle_decelerate",
+            "strong_decelerate"
+          ],
+          "matched_actions": []
+        },
+        "lateral": {
+          "axis": "lateral",
+          "cot_label": "go_straight",
+          "trajectory_label": "go_straight",
+          "cot_family": null,
+          "trajectory_family": null,
+          "verdict": "consistent",
+          "reward": 1.0,
+          "cot_sequence": [
+            "go_straight"
+          ],
+          "trajectory_sequence": [
+            "go_straight"
+          ],
+          "matched_actions": [
+            {
+              "cot_label": "go_straight",
+              "trajectory_label": "go_straight",
+              "trajectory_index": 0
+            }
+          ]
+        },
+        "cot_parse": {
+          "parser": "keyword",
+          "longitudinal": "unknown",
+          "lateral": "go_straight",
+          "longitudinal_sequence": [],
+          "lateral_sequence": [
+            "go_straight"
+          ],
+          "longitudinal_evidence": [],
+          "lateral_evidence": [
+            {
+              "phrase": "keep lane",
+              "label": "go_straight",
+              "start": 2,
+              "end": 11,
+              "negated": false
+            }
+          ],
+          "all_matches": [
+            {
+              "phrase": "keep lane",
+              "label": "go_straight",
+              "start": 2,
+              "end": 11,
+              "negated": false
+            }
+          ],
+          "text": "['keep lane since no lead vehicle is present ahead']"
+        }
+      },
+      "error": null
+    },
+    {
+      "clip_id": "clipgt-37f45f87-dc3b-4425-a388-fa7bfa4a11a6_t0130",
+      "metadata_path": "data/media/scenes/clipgt-37f45f87-dc3b-4425-a388-fa7bfa4a11a6_t0130/metadata.json",
+      "cot_text": "['Keep distance to the lead vehicle since it is directly ahead in our lane']",
+      "report": {
+        "score": 1.0,
+        "label": "consistent",
+        "longitudinal": {
+          "axis": "longitudinal",
+          "cot_label": "maintain_speed",
+          "trajectory_label": "maintain_speed",
+          "cot_family": null,
+          "trajectory_family": null,
+          "verdict": "consistent",
+          "reward": 1.0,
+          "cot_sequence": [
+            "maintain_speed"
+          ],
+          "trajectory_sequence": [
+            "maintain_speed",
+            "gentle_accelerate",
+            "maintain_speed"
+          ],
+          "matched_actions": [
+            {
+              "cot_label": "maintain_speed",
+              "trajectory_label": "maintain_speed",
+              "trajectory_index": 0
+            }
+          ]
+        },
+        "lateral": {
+          "axis": "lateral",
+          "cot_label": "unknown",
+          "trajectory_label": "go_straight",
+          "cot_family": null,
+          "trajectory_family": null,
+          "verdict": "no_intent",
+          "reward": 1.0,
+          "cot_sequence": [],
+          "trajectory_sequence": [
+            "go_straight"
+          ],
+          "matched_actions": []
+        },
+        "cot_parse": {
+          "parser": "keyword",
+          "longitudinal": "maintain_speed",
+          "lateral": "unknown",
+          "longitudinal_sequence": [
+            "maintain_speed"
+          ],
+          "lateral_sequence": [],
+          "longitudinal_evidence": [
+            {
+              "phrase": "keep distance",
+              "label": "maintain_speed",
+              "start": 2,
+              "end": 15,
+              "negated": false
+            }
+          ],
+          "lateral_evidence": [],
+          "all_matches": [
+            {
+              "phrase": "keep distance",
+              "label": "maintain_speed",
+              "start": 2,
+              "end": 15,
+              "negated": false
+            }
+          ],
+          "text": "['keep distance to the lead vehicle since it is directly ahead in our lane']"
+        }
+      },
+      "error": null
+    },
+    {
+      "clip_id": "clipgt-8cc4c64e-c4f1-4a08-bfa4-f796d2c4250c_t0030",
+      "metadata_path": "data/media/scenes/clipgt-8cc4c64e-c4f1-4a08-bfa4-f796d2c4250c_t0030/metadata.json",
+      "cot_text": "['Nudge left due to the roadside post encroaching from the right']",
+      "report": {
+        "score": 1.0,
+        "label": "consistent",
+        "longitudinal": {
+          "axis": "longitudinal",
+          "cot_label": "unknown",
+          "trajectory_label": "maintain_speed",
+          "cot_family": null,
+          "trajectory_family": null,
+          "verdict": "no_intent",
+          "reward": 1.0,
+          "cot_sequence": [],
+          "trajectory_sequence": [
+            "maintain_speed",
+            "gentle_decelerate",
+            "maintain_speed",
+            "gentle_accelerate",
+            "maintain_speed",
+            "gentle_decelerate"
+          ],
+          "matched_actions": []
+        },
+        "lateral": {
+          "axis": "lateral",
+          "cot_label": "steer_left",
+          "trajectory_label": "go_straight",
+          "cot_family": null,
+          "trajectory_family": null,
+          "verdict": "consistent",
+          "reward": 1.0,
+          "cot_sequence": [
+            "steer_left"
+          ],
+          "trajectory_sequence": [
+            "go_straight",
+            "steer_left",
+            "go_straight"
+          ],
+          "matched_actions": [
+            {
+              "cot_label": "steer_left",
+              "trajectory_label": "steer_left",
+              "trajectory_index": 1
+            }
+          ]
+        },
+        "cot_parse": {
+          "parser": "keyword",
+          "longitudinal": "unknown",
+          "lateral": "steer_left",
+          "longitudinal_sequence": [],
+          "lateral_sequence": [
+            "steer_left"
+          ],
+          "longitudinal_evidence": [],
+          "lateral_evidence": [
+            {
+              "phrase": "nudge left",
+              "label": "steer_left",
+              "start": 2,
+              "end": 12,
+              "negated": false
+            }
+          ],
+          "all_matches": [
+            {
+              "phrase": "nudge left",
+              "label": "steer_left",
+              "start": 2,
+              "end": 12,
+              "negated": false
+            }
+          ],
+          "text": "['nudge left due to the roadside post encroaching from the right']"
+        }
+      },
+      "error": null
+    },
+    {
+      "clip_id": "clipgt-42a44314-739b-4d5f-9bbe-a960bec36277_t0125",
+      "metadata_path": "data/media/scenes/clipgt-42a44314-739b-4d5f-9bbe-a960bec36277_t0125/metadata.json",
+      "cot_text": "['Accelerate to complete the right turn because of a clear intersection']",
+      "report": {
+        "score": 1.0,
+        "label": "consistent",
+        "longitudinal": {
+          "axis": "longitudinal",
+          "cot_label": "gentle_accelerate",
+          "trajectory_label": "maintain_speed",
+          "cot_family": null,
+          "trajectory_family": null,
+          "verdict": "consistent",
+          "reward": 1.0,
+          "cot_sequence": [
+            "gentle_accelerate"
+          ],
+          "trajectory_sequence": [
+            "maintain_speed",
+            "gentle_accelerate",
+            "maintain_speed",
+            "gentle_accelerate",
+            "maintain_speed",
+            "gentle_accelerate"
+          ],
+          "matched_actions": [
+            {
+              "cot_label": "gentle_accelerate",
+              "trajectory_label": "gentle_accelerate",
+              "trajectory_index": 1
+            }
+          ]
+        },
+        "lateral": {
+          "axis": "lateral",
+          "cot_label": "unknown",
+          "trajectory_label": "go_straight",
+          "cot_family": null,
+          "trajectory_family": null,
+          "verdict": "no_intent",
+          "reward": 1.0,
+          "cot_sequence": [],
+          "trajectory_sequence": [
+            "go_straight",
+            "steer_right",
+            "go_straight",
+            "steer_left",
+            "sharp_steer_left",
+            "steer_left",
+            "go_straight"
+          ],
+          "matched_actions": []
+        },
+        "cot_parse": {
+          "parser": "keyword",
+          "longitudinal": "gentle_accelerate",
+          "lateral": "unknown",
+          "longitudinal_sequence": [
+            "gentle_accelerate"
+          ],
+          "lateral_sequence": [],
+          "longitudinal_evidence": [
+            {
+              "phrase": "accelerate",
+              "label": "gentle_accelerate",
+              "start": 2,
+              "end": 12,
+              "negated": false
+            }
+          ],
+          "lateral_evidence": [],
+          "all_matches": [
+            {
+              "phrase": "accelerate",
+              "label": "gentle_accelerate",
+              "start": 2,
+              "end": 12,
+              "negated": false
+            }
+          ],
+          "text": "['accelerate to complete the right turn because of a clear intersection']"
+        }
+      },
+      "error": null
+    },
+    {
+      "clip_id": "clipgt-f8ee31cb-cf0f-45ef-bce5-1b43bd6a4d25_t0040",
+      "metadata_path": "data/media/scenes/clipgt-f8ee31cb-cf0f-45ef-bce5-1b43bd6a4d25_t0040/metadata.json",
+      "cot_text": "['Adapt speed to maintain a safe distance from the lead vehicle since it is stopped ahead']",
+      "report": {
+        "score": 0.0,
+        "label": "inconsistent",
+        "longitudinal": {
+          "axis": "longitudinal",
+          "cot_label": "gentle_decelerate",
+          "trajectory_label": "maintain_speed",
+          "cot_family": null,
+          "trajectory_family": null,
+          "verdict": "mismatch",
+          "reward": 0.0,
+          "cot_sequence": [
+            "gentle_decelerate",
+            "maintain_speed"
+          ],
+          "trajectory_sequence": [
+            "maintain_speed",
+            "gentle_decelerate",
+            "stop"
+          ],
+          "matched_actions": []
+        },
+        "lateral": {
+          "axis": "lateral",
+          "cot_label": "unknown",
+          "trajectory_label": "go_straight",
+          "cot_family": null,
+          "trajectory_family": null,
+          "verdict": "no_intent",
+          "reward": 1.0,
+          "cot_sequence": [],
+          "trajectory_sequence": [
+            "go_straight"
+          ],
+          "matched_actions": []
+        },
+        "cot_parse": {
+          "parser": "keyword",
+          "longitudinal": "gentle_decelerate",
+          "lateral": "unknown",
+          "longitudinal_sequence": [
+            "gentle_decelerate",
+            "maintain_speed"
+          ],
+          "lateral_sequence": [],
+          "longitudinal_evidence": [
+            {
+              "phrase": "adapt speed",
+              "label": "gentle_decelerate",
+              "start": 2,
+              "end": 13,
+              "negated": false
+            },
+            {
+              "phrase": "maintain a safe distance",
+              "label": "maintain_speed",
+              "start": 17,
+              "end": 41,
+              "negated": false
+            }
+          ],
+          "lateral_evidence": [],
+          "all_matches": [
+            {
+              "phrase": "adapt speed",
+              "label": "gentle_decelerate",
+              "start": 2,
+              "end": 13,
+              "negated": false
+            },
+            {
+              "phrase": "maintain a safe distance",
+              "label": "maintain_speed",
+              "start": 17,
+              "end": 41,
+              "negated": false
+            }
+          ],
+          "text": "['adapt speed to maintain a safe distance from the lead vehicle since it is stopped ahead']"
+        }
+      },
+      "error": null
+    },
+    {
+      "clip_id": "clipgt-66291265-ce4e-4859-80b7-d4f3dd85a970_t0165",
+      "metadata_path": "data/media/scenes/clipgt-66291265-ce4e-4859-80b7-d4f3dd85a970_t0165/metadata.json",
+      "cot_text": "['Stop to keep distance to the lead vehicle since it is stopped ahead']",
+      "report": {
+        "score": 1.0,
+        "label": "consistent",
+        "longitudinal": {
+          "axis": "longitudinal",
+          "cot_label": "stop",
+          "trajectory_label": "maintain_speed",
+          "cot_family": null,
+          "trajectory_family": null,
+          "verdict": "consistent",
+          "reward": 1.0,
+          "cot_sequence": [
+            "stop"
+          ],
+          "trajectory_sequence": [
+            "maintain_speed",
+            "gentle_decelerate",
+            "stop"
+          ],
+          "matched_actions": [
+            {
+              "cot_label": "stop",
+              "trajectory_label": "stop",
+              "trajectory_index": 2
+            }
+          ]
+        },
+        "lateral": {
+          "axis": "lateral",
+          "cot_label": "unknown",
+          "trajectory_label": "go_straight",
+          "cot_family": null,
+          "trajectory_family": null,
+          "verdict": "no_intent",
+          "reward": 1.0,
+          "cot_sequence": [],
+          "trajectory_sequence": [
+            "go_straight",
+            "steer_left",
+            "go_straight"
+          ],
+          "matched_actions": []
+        },
+        "cot_parse": {
+          "parser": "keyword",
+          "longitudinal": "stop",
+          "lateral": "unknown",
+          "longitudinal_sequence": [
+            "stop"
+          ],
+          "lateral_sequence": [],
+          "longitudinal_evidence": [
+            {
+              "phrase": "stop to keep distance",
+              "label": "stop",
+              "start": 2,
+              "end": 23,
+              "negated": false
+            }
+          ],
+          "lateral_evidence": [],
+          "all_matches": [
+            {
+              "phrase": "stop to keep distance",
+              "label": "stop",
+              "start": 2,
+              "end": 23,
+              "negated": false
+            }
+          ],
+          "text": "['stop to keep distance to the lead vehicle since it is stopped ahead']"
+        }
+      },
+      "error": null
+    },
+    {
+      "clip_id": "clipgt-d1a25a99-0f02-4730-a076-96f067e92874_t0090",
+      "metadata_path": "data/media/scenes/clipgt-d1a25a99-0f02-4730-a076-96f067e92874_t0090/metadata.json",
+      "cot_text": "['Nudge right due to the vehicle encroaching from the left']",
+      "report": {
+        "score": 1.0,
+        "label": "consistent",
+        "longitudinal": {
+          "axis": "longitudinal",
+          "cot_label": "unknown",
+          "trajectory_label": "maintain_speed",
+          "cot_family": null,
+          "trajectory_family": null,
+          "verdict": "no_intent",
+          "reward": 1.0,
+          "cot_sequence": [],
+          "trajectory_sequence": [
+            "maintain_speed",
+            "gentle_decelerate",
+            "maintain_speed",
+            "gentle_accelerate"
+          ],
+          "matched_actions": []
+        },
+        "lateral": {
+          "axis": "lateral",
+          "cot_label": "steer_right",
+          "trajectory_label": "go_straight",
+          "cot_family": null,
+          "trajectory_family": null,
+          "verdict": "consistent",
+          "reward": 1.0,
+          "cot_sequence": [
+            "steer_right"
+          ],
+          "trajectory_sequence": [
+            "go_straight",
+            "sharp_steer_right",
+            "steer_right"
+          ],
+          "matched_actions": [
+            {
+              "cot_label": "steer_right",
+              "trajectory_label": "steer_right",
+              "trajectory_index": 2
+            }
+          ]
+        },
+        "cot_parse": {
+          "parser": "keyword",
+          "longitudinal": "unknown",
+          "lateral": "steer_right",
+          "longitudinal_sequence": [],
+          "lateral_sequence": [
+            "steer_right"
+          ],
+          "longitudinal_evidence": [],
+          "lateral_evidence": [
+            {
+              "phrase": "nudge right",
+              "label": "steer_right",
+              "start": 2,
+              "end": 13,
+              "negated": false
+            }
+          ],
+          "all_matches": [
+            {
+              "phrase": "nudge right",
+              "label": "steer_right",
+              "start": 2,
+              "end": 13,
+              "negated": false
+            }
+          ],
+          "text": "['nudge right due to the vehicle encroaching from the left']"
+        }
+      },
+      "error": null
+    },
+    {
+      "clip_id": "clipgt-2b4b2e84-cff4-4697-a4b5-ccb706f69438_t0147",
+      "metadata_path": "data/media/scenes/clipgt-2b4b2e84-cff4-4697-a4b5-ccb706f69438_t0147/metadata.json",
+      "cot_text": "['Keep distance to the lead vehicle since it is directly ahead in our lane']",
+      "report": {
+        "score": 1.0,
+        "label": "consistent",
+        "longitudinal": {
+          "axis": "longitudinal",
+          "cot_label": "maintain_speed",
+          "trajectory_label": "maintain_speed",
+          "cot_family": null,
+          "trajectory_family": null,
+          "verdict": "consistent",
+          "reward": 1.0,
+          "cot_sequence": [
+            "maintain_speed"
+          ],
+          "trajectory_sequence": [
+            "maintain_speed",
+            "gentle_decelerate"
+          ],
+          "matched_actions": [
+            {
+              "cot_label": "maintain_speed",
+              "trajectory_label": "maintain_speed",
+              "trajectory_index": 0
+            }
+          ]
+        },
+        "lateral": {
+          "axis": "lateral",
+          "cot_label": "unknown",
+          "trajectory_label": "go_straight",
+          "cot_family": null,
+          "trajectory_family": null,
+          "verdict": "no_intent",
+          "reward": 1.0,
+          "cot_sequence": [],
+          "trajectory_sequence": [
+            "go_straight",
+            "steer_left",
+            "go_straight",
+            "steer_right",
+            "go_straight",
+            "steer_left"
+          ],
+          "matched_actions": []
+        },
+        "cot_parse": {
+          "parser": "keyword",
+          "longitudinal": "maintain_speed",
+          "lateral": "unknown",
+          "longitudinal_sequence": [
+            "maintain_speed"
+          ],
+          "lateral_sequence": [],
+          "longitudinal_evidence": [
+            {
+              "phrase": "keep distance",
+              "label": "maintain_speed",
+              "start": 2,
+              "end": 15,
+              "negated": false
+            }
+          ],
+          "lateral_evidence": [],
+          "all_matches": [
+            {
+              "phrase": "keep distance",
+              "label": "maintain_speed",
+              "start": 2,
+              "end": 15,
+              "negated": false
+            }
+          ],
+          "text": "['keep distance to the lead vehicle since it is directly ahead in our lane']"
+        }
+      },
+      "error": null
+    },
+    {
+      "clip_id": "clipgt-764c8a4a-bddc-4e3c-9df4-0941982efeba_t0055",
+      "metadata_path": "data/media/scenes/clipgt-764c8a4a-bddc-4e3c-9df4-0941982efeba_t0055/metadata.json",
+      "cot_text": "['Adapt speed for the right curve since the lane bends right ahead']",
+      "report": {
+        "score": 0.0,
+        "label": "inconsistent",
+        "longitudinal": {
+          "axis": "longitudinal",
+          "cot_label": "gentle_decelerate",
+          "trajectory_label": "maintain_speed",
+          "cot_family": null,
+          "trajectory_family": null,
+          "verdict": "mismatch",
+          "reward": 0.0,
+          "cot_sequence": [
+            "gentle_decelerate"
+          ],
+          "trajectory_sequence": [
+            "maintain_speed",
+            "gentle_accelerate",
+            "maintain_speed"
+          ],
+          "matched_actions": []
+        },
+        "lateral": {
+          "axis": "lateral",
+          "cot_label": "unknown",
+          "trajectory_label": "go_straight",
+          "cot_family": null,
+          "trajectory_family": null,
+          "verdict": "no_intent",
+          "reward": 1.0,
+          "cot_sequence": [],
+          "trajectory_sequence": [
+            "go_straight"
+          ],
+          "matched_actions": []
+        },
+        "cot_parse": {
+          "parser": "keyword",
+          "longitudinal": "gentle_decelerate",
+          "lateral": "unknown",
+          "longitudinal_sequence": [
+            "gentle_decelerate"
+          ],
+          "lateral_sequence": [],
+          "longitudinal_evidence": [
+            {
+              "phrase": "adapt speed",
+              "label": "gentle_decelerate",
+              "start": 2,
+              "end": 13,
+              "negated": false
+            }
+          ],
+          "lateral_evidence": [],
+          "all_matches": [
+            {
+              "phrase": "adapt speed",
+              "label": "gentle_decelerate",
+              "start": 2,
+              "end": 13,
+              "negated": false
+            }
+          ],
+          "text": "['adapt speed for the right curve since the lane bends right ahead']"
+        }
+      },
+      "error": null
+    },
+    {
+      "clip_id": "clipgt-a72b3cac-29e9-467c-bf38-f59f6b55a7d2_t0115",
+      "metadata_path": "data/media/scenes/clipgt-a72b3cac-29e9-467c-bf38-f59f6b55a7d2_t0115/metadata.json",
+      "cot_text": "['Keep lane since the lane is clear ahead']",
+      "report": {
+        "score": 1.0,
+        "label": "consistent",
+        "longitudinal": {
+          "axis": "longitudinal",
+          "cot_label": "unknown",
+          "trajectory_label": "maintain_speed",
+          "cot_family": null,
+          "trajectory_family": null,
+          "verdict": "no_intent",
+          "reward": 1.0,
+          "cot_sequence": [],
+          "trajectory_sequence": [
+            "maintain_speed",
+            "gentle_decelerate",
+            "strong_decelerate",
+            "gentle_decelerate",
+            "maintain_speed"
+          ],
+          "matched_actions": []
+        },
+        "lateral": {
+          "axis": "lateral",
+          "cot_label": "go_straight",
+          "trajectory_label": "go_straight",
+          "cot_family": null,
+          "trajectory_family": null,
+          "verdict": "consistent",
+          "reward": 1.0,
+          "cot_sequence": [
+            "go_straight"
+          ],
+          "trajectory_sequence": [
+            "go_straight",
+            "steer_right",
+            "go_straight"
+          ],
+          "matched_actions": [
+            {
+              "cot_label": "go_straight",
+              "trajectory_label": "go_straight",
+              "trajectory_index": 0
+            }
+          ]
+        },
+        "cot_parse": {
+          "parser": "keyword",
+          "longitudinal": "unknown",
+          "lateral": "go_straight",
+          "longitudinal_sequence": [],
+          "lateral_sequence": [
+            "go_straight"
+          ],
+          "longitudinal_evidence": [],
+          "lateral_evidence": [
+            {
+              "phrase": "keep lane",
+              "label": "go_straight",
+              "start": 2,
+              "end": 11,
+              "negated": false
+            }
+          ],
+          "all_matches": [
+            {
+              "phrase": "keep lane",
+              "label": "go_straight",
+              "start": 2,
+              "end": 11,
+              "negated": false
+            }
+          ],
+          "text": "['keep lane since the lane is clear ahead']"
+        }
+      },
+      "error": null
+    }
+  ]
+}
